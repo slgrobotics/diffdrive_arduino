@@ -36,7 +36,7 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   // Set up the Arduino
   arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);  
 
-  RCLCPP_INFO(logger_, "Finished Configuration");
+  RCLCPP_INFO(logger_, "Finished Configuration - Arduino on %s at %d baud", const_cast<char*>(cfg_.device.c_str()), cfg_.baud_rate);
 
   return CallbackReturn::SUCCESS;
 }
@@ -70,7 +70,7 @@ std::vector<hardware_interface::CommandInterface> DiffDriveArduino::export_comma
 
 hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "Starting Controller...");
+  RCLCPP_INFO(logger_, "Starting Arduino Controller...");
 
   arduino_.sendEmptyMsg();
   // arduino.setPidValues(9,7,0,100);
@@ -82,7 +82,7 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_li
 
 hardware_interface::CallbackReturn DiffDriveArduino::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "Stopping Controller...");
+  RCLCPP_INFO(logger_, "Stopping Arduino Controller...");
 
   return CallbackReturn::SUCCESS;
 }
@@ -90,6 +90,11 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_deactivate(const rclcpp_
 hardware_interface::return_type DiffDriveArduino::read(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
+  /*
+   * param[in] time The time at the start of this control loop iteration
+   * param[in] period The measured time taken by the last control loop iteration
+   * return return_type::OK if the read was successful, return_type::ERROR otherwise.
+   */
 
   // TODO fix chrono duration
 
@@ -107,13 +112,15 @@ hardware_interface::return_type DiffDriveArduino::read(
 
   arduino_.readEncoderValues(l_wheel_.enc, r_wheel_.enc);
 
+  //RCLCPP_INFO(logger_, "enc: %d  %d", l_wheel_.enc, r_wheel_.enc);
+
   double pos_prev = l_wheel_.pos;
   l_wheel_.pos = l_wheel_.calcEncAngle();
-  l_wheel_.vel = (l_wheel_.pos - pos_prev) / deltaSeconds;
+  l_wheel_.vel = (l_wheel_.pos - pos_prev) / deltaSeconds; // (double)period.nanoseconds();
 
   pos_prev = r_wheel_.pos;
   r_wheel_.pos = r_wheel_.calcEncAngle();
-  r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds;
+  r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds; //(double)period.nanoseconds();
 
 
 

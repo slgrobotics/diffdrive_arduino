@@ -24,7 +24,11 @@ void ArduinoComms::sendEmptyMsg()
 
 void ArduinoComms::readEncoderValues(int &val_1, int &val_2)
 {
+    //std::cout << "...polling encoders..." << std::endl;
+
     std::string response = sendMsg("e\r");
+
+    //std::cout << "response: " << response << std::endl;
 
     std::string delimiter = " ";
     size_t del_pos = response.find(delimiter);
@@ -51,8 +55,14 @@ void ArduinoComms::setPidValues(float k_p, float k_d, float k_i, float k_o)
 
 std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_output)
 {
+    //std::cout << "...sending: " << msg_to_send << std::endl;
+
     serial_conn_.write(msg_to_send);
-    std::string response = serial_conn_.readline();
+
+    std::string response = serial_conn_.readline(1024, "\r");
+
+    //std::cout << "response: '" << response << "'" << std::endl;
+
 
     if (print_output)
     {
