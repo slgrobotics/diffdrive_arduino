@@ -10,6 +10,8 @@ void ArduinoComms::setup(const std::string &serial_device, int32_t baud_rate, in
     serial_conn_.setPort(serial_device);
     serial_conn_.setBaudrate(baud_rate);
     serial::Timeout tt = serial::Timeout::simpleTimeout(timeout_ms);
+    tt.write_timeout_constant = 10;
+    tt.inter_byte_timeout = 1;
     serial_conn_.setTimeout(tt); // This should be inline except setTimeout takes a reference and so needs a variable
     serial_conn_.open();
     // serial_conn_.(serial_device, baud_rate, serial::Timeout::simpleTimeout(timeout_ms));
@@ -41,6 +43,7 @@ void ArduinoComms::readEncoderValues(int &val_1, int &val_2)
 
 void ArduinoComms::setMotorValues(int val_1, int val_2)
 {
+    // "m" - set speeds, "o" - set raw PWM
     std::stringstream ss;
     ss << "m " << val_1 << " " << val_2 << "\r";
     sendMsg(ss.str(), false);
