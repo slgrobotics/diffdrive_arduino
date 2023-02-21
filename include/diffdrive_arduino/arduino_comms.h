@@ -18,8 +18,14 @@ public:
   {  }
 
   void setup(const std::string &serial_device, int32_t baud_rate, int32_t timeout_ms);
+
   void sendEmptyMsg();
+  
   void readEncoderValues(int &val_1, int &val_2);
+  void readGpsValues(std::string &values);
+  void readHealthValues(int &mv_per_cell, int &current_ma, int &free_mem_bytes);
+  void readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
+
   void setMotorValues(int val_1, int val_2);
   void setPidValues(float k_p, float k_d, float k_i, float k_o);
 

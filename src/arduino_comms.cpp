@@ -57,6 +57,49 @@ void ArduinoComms::readEncoderValues(int &val_1, int &val_2)
     }
 }
 
+void ArduinoComms::readGpsValues(std::string &values)
+{
+    std::string response = sendMsg("g\r");
+
+    values = response;
+}
+
+void ArduinoComms::readHealthValues(int &mv_per_cell, int &current_ma, int &free_mem_bytes)
+{
+    std::string response = sendMsg("h\r");
+
+    std::istringstream iss(response);
+    std::vector<std::string> results(std::istream_iterator<std::string>{iss},
+                                     std::istream_iterator<std::string>());
+    
+    if(results.size() == 3)
+    {
+        mv_per_cell = std::atoi(results.at(0).c_str());
+        current_ma = std::atoi(results.at(1).c_str());
+        free_mem_bytes = std::atoi(results.at(2).c_str());
+    }
+}
+
+void ArduinoComms::readPingValues(int &front_right, int &front_left, int &back_right, int &back_left)
+{
+    std::string response = sendMsg("p\r");
+
+    //std::cout << "Sonar: '" << response << "'" << std::endl;
+
+    std::istringstream iss(response);
+    std::vector<std::string> results(std::istream_iterator<std::string>{iss},
+                                     std::istream_iterator<std::string>());
+    
+    if(results.size() == 4)
+    {
+        // Ranges in centimeters:
+        front_right = std::atoi(results.at(0).c_str());
+        front_left = std::atoi(results.at(1).c_str());
+        back_right = std::atoi(results.at(2).c_str());
+        back_left = std::atoi(results.at(3).c_str());
+    }
+}
+
 void ArduinoComms::setMotorValues(int val_1, int val_2)
 {
     // "m" - set speeds, "o" - set raw PWM
@@ -77,6 +120,8 @@ void ArduinoComms::setPidValues(float k_p, float k_d, float k_i, float k_o)
 #define PIN_MODE       'c'
 #define DIGITAL_READ   'd'
 #define READ_ENCODERS  'e'
+#define READ_GPS       'g'
+#define READ_HEALTH    'h'
 #define MOTOR_SPEEDS   'm'
 #define MOTOR_RAW_PWM  'o'
 #define SONAR_PING     'p'
@@ -112,16 +157,19 @@ std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_out
 
     switch(cmd)
     {
+        // These requests do cause response with data:
         case ANALOG_READ:
         case GET_BAUDRATE:
         case DIGITAL_READ:
         case READ_ENCODERS:
+        case READ_GPS:
+        case READ_HEALTH:
         case SONAR_PING:
         case SERVO_READ:
             response = serial_conn_.readline(1024, "\r");
             break;
         default:
-            return;
+            return; // no response expected
     }
 
 #endif // EXPECT_RESPONSE_OK

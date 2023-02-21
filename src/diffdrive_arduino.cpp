@@ -125,7 +125,23 @@ hardware_interface::return_type DiffDriveArduino::read(
   r_wheel_.pos = r_wheel_.calcEncAngle();
   r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds; //(double)period.nanoseconds();
 
+  //int front_right, front_left, back_right, back_left; // centimeters
 
+  //arduino_.readPingValues(front_right, front_left, back_right, back_left);
+
+  //RCLCPP_INFO(logger_, "Ping: %d  %d %d  %d", front_right, front_left, back_right, back_left);
+
+  //std::string gps_values_str;
+
+  //arduino_.readGpsValues(gps_values_str);
+
+  //RCLCPP_INFO(logger_, "GPS: %s", gps_values_str.c_str());
+
+  //int mv_per_cell, current_ma, free_mem_bytes;
+
+  //arduino_.readHealthValues(mv_per_cell, current_ma, free_mem_bytes);
+
+  //RCLCPP_INFO(logger_, "Health: %d mV     %d mA    %d bytes free", mv_per_cell, current_ma, free_mem_bytes);
 
   return return_type::OK;
 
