@@ -73,8 +73,8 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_li
   RCLCPP_INFO(logger_, "Starting Arduino Controller...");
 
   arduino_.sendEmptyMsg();
-  arduino_.sendEmptyMsg();
-  arduino_.sendEmptyMsg();
+  //arduino_.sendEmptyMsg();
+  //arduino_.sendEmptyMsg();
   // arduino.setPidValues(9,7,0,100);
   // arduino.setPidValues(14,7,0,100);
   sleep(1);
@@ -157,10 +157,16 @@ hardware_interface::return_type DiffDriveArduino::write(
     return return_type::ERROR;
   }
 
-  arduino_.setMotorValues(l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate, r_wheel_.cmd / r_wheel_.rads_per_count / cfg_.loop_rate);
+  //RCLCPP_INFO(logger_, "cmd: %f  sending: %f", l_wheel_.cmd, l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate);
 
+  double plucky_factor = 250.0 / 107.0;  // account for Plucky wheels "m pwm pwm" command. Turbo joystick mode sends 107 to wheels. 
 
+  double l_cmd = l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate * plucky_factor;
+  double r_cmd = r_wheel_.cmd / r_wheel_.rads_per_count / cfg_.loop_rate * plucky_factor;
 
+  //RCLCPP_INFO(logger_, "cmd: %f  sending: %f", l_wheel_.cmd, l_cmd);
+
+  arduino_.setMotorValues(l_cmd, r_cmd);
 
   return return_type::OK;
 
