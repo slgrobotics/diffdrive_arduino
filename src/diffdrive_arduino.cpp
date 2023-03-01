@@ -159,7 +159,19 @@ hardware_interface::return_type DiffDriveArduino::write(
 
   //RCLCPP_INFO(logger_, "cmd: %f  sending: %f", l_wheel_.cmd, l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate);
 
-  double plucky_factor = 250.0 / 107.0;  // account for Plucky wheels "m pwm pwm" command. Turbo joystick mode sends 107 to wheels. 
+  // Desired speed is set by Comm (Rpi -> Arduino)
+  // comes in the range -100...100 - it has a meaning of "percent of max possible speed":
+  // For Plucky full wheel rotation at full power takes 3.8 seconds.
+  // So, with R_wheel = 0.192m max speed is:
+  //   - 0.317 m/sec
+  //   - 1.65 rad/sec
+  //   - 660 encoder ticks/sec
+
+  // With ROS2 Joystick at full forward:
+  //   Normal mode: cmd_vel.linear.x=0.7, l_cmd=50
+  //   Turbo mode:  cmd_vel.linear.x=1.4, l_cmd=107
+
+  double plucky_factor = 1.0;  // account for Plucky wheels "m pwm pwm" command. Turbo joystick mode sends 107 to wheels. 
 
   double l_cmd = l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate * plucky_factor;
   double r_cmd = r_wheel_.cmd / r_wheel_.rads_per_count / cfg_.loop_rate * plucky_factor;
