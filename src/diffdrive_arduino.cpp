@@ -3,7 +3,8 @@
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 
-
+// See https://github.com/slgrobotics/robots_bringup/tree/main/Docs/Dragger
+//     https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/DraggerROS
 
 DiffDriveArduino::DiffDriveArduino()
     : logger_(rclcpp::get_logger("DiffDriveArduino"))
@@ -67,6 +68,46 @@ std::vector<hardware_interface::CommandInterface> DiffDriveArduino::export_comma
   return command_interfaces;
 }
 
+/*
+this should be in Broadcaster
+  // See https://answers.ros.org/question/414029/access-ros-node-in-hardware_interface/
+  //     https://github.com/ipa320/ros_battery_monitoring
+
+controller_interface::CallbackReturn DiffDriveArduino::on_configure(const rclcpp_lifecycle::State & / *previous_state* /)
+{
+  RCLCPP_INFO(logger_, "Configuring Arduino Controller...");
+
+  battery_state_pub_ = getNode()->create_publisher<sensor_msgs::msg::BatteryState>("~/battery_state", rclcpp::SystemDefaultsQoS());
+
+  realtime_publisher_ =
+      std::make_unique<realtime_tools::RealtimePublisher<sensor_msgs::msg::BatteryState>>(battery_state_pub_);
+
+  realtime_publisher_->msg_.temperature = std::numeric_limits<double>::quiet_NaN();
+  realtime_publisher_->msg_.current = std::numeric_limits<double>::quiet_NaN();
+  realtime_publisher_->msg_.charge = std::numeric_limits<double>::quiet_NaN();
+  realtime_publisher_->msg_.capacity = std::numeric_limits<double>::quiet_NaN();
+  realtime_publisher_->msg_.design_capacity = std::numeric_limits<double>::quiet_NaN();
+  realtime_publisher_->msg_.percentage = std::numeric_limits<double>::quiet_NaN();
+  realtime_publisher_->msg_.power_supply_status = sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
+  realtime_publisher_->msg_.power_supply_health = sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
+  realtime_publisher_->msg_.power_supply_technology = sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
+  realtime_publisher_->msg_.present = true;
+
+  int64_t psu_tech = get_node()->get_parameter("power_supply_technology").as_int();
+  if (psu_tech != -1)
+  {
+    realtime_publisher_->msg_.power_supply_technology = psu_tech;
+  }
+
+  double design_capacity = get_node()->get_parameter("design_capacity").as_double();
+  if (design_capacity != 0.0)
+  {
+    realtime_publisher_->msg_.design_capacity = static_cast<float>(design_capacity);
+  }
+
+  return CallbackReturn::SUCCESS;
+}
+*/
 
 hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_lifecycle::State & /*previous_state*/)
 {
@@ -125,6 +166,8 @@ hardware_interface::return_type DiffDriveArduino::read(
   r_wheel_.pos = r_wheel_.calcEncAngle();
   r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds; //(double)period.nanoseconds();
 
+  publishBatteryState();
+
   //int front_right, front_left, back_right, back_left; // centimeters
 
   //arduino_.readPingValues(front_right, front_left, back_right, back_left);
@@ -137,15 +180,25 @@ hardware_interface::return_type DiffDriveArduino::read(
 
   //RCLCPP_INFO(logger_, "GPS: %s", gps_values_str.c_str());
 
-  //int mv_per_cell, current_ma, free_mem_bytes;
-
-  //arduino_.readHealthValues(mv_per_cell, current_ma, free_mem_bytes);
-
-  //RCLCPP_INFO(logger_, "Health: %d mV     %d mA    %d bytes free", mv_per_cell, current_ma, free_mem_bytes);
-
   return return_type::OK;
+}
 
-  
+void DiffDriveArduino::publishBatteryState()
+{
+  if((++bat_cnt_) > 100)
+  {
+    bat_cnt_ = 0;
+
+    int battery_mv, current_ma, free_mem_bytes;
+
+    arduino_.readHealthValues(battery_mv, current_ma, free_mem_bytes);
+
+    RCLCPP_INFO(logger_, "Battery Health: %d mV     %d mA    %d bytes free", battery_mv, current_ma, free_mem_bytes);
+
+    //auto message = sensor_msgs::msg::BatteryState();
+
+    //battery_state_pub_->publish(message);
+  }
 }
 
 hardware_interface::return_type DiffDriveArduino::write(
@@ -171,10 +224,10 @@ hardware_interface::return_type DiffDriveArduino::write(
   //   Normal mode: cmd_vel.linear.x=0.7, l_cmd=50
   //   Turbo mode:  cmd_vel.linear.x=1.4, l_cmd=107
 
-  double plucky_factor = 1.0;  // account for Plucky wheels "m pwm pwm" command. Turbo joystick mode sends 107 to wheels. 
+  double wheels_pwm_factor = 1.0;  // account for Plucky wheels "m pwm pwm" command. Turbo joystick mode sends 107 to wheels. 
 
-  double l_cmd = l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate * plucky_factor;
-  double r_cmd = r_wheel_.cmd / r_wheel_.rads_per_count / cfg_.loop_rate * plucky_factor;
+  double l_cmd = l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate * wheels_pwm_factor;
+  double r_cmd = r_wheel_.cmd / r_wheel_.rads_per_count / cfg_.loop_rate * wheels_pwm_factor;
 
   //RCLCPP_INFO(logger_, "cmd: %f  sending: %f", l_wheel_.cmd, l_cmd);
 

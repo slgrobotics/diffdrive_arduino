@@ -10,12 +10,7 @@ int main(int argc, char **argv)
   DiffDriveArduino::Config robot_cfg;
 
   // Attempt to retrieve parameters. If they don't exist, the default values from the struct will be used
-  n.getParam("left_wheel_name", robot_cfg.left_wheel_name);
-  n.getParam("right_wheel_name", robot_cfg.right_wheel_name);
-  n.getParam("baud_rate", robot_cfg.baud_rate);
-  n.getParam("device", robot_cfg.device);
-  n.getParam("enc_counts_per_rev", robot_cfg.enc_counts_per_rev);
-  n.getParam("robot_loop_rate", robot_cfg.loop_rate);
+  n.getParam("robot_loop_rate", robot_cfg.loop_rate); // Hz
   
 
   DiffDriveArduino robot(robot_cfg);
@@ -26,7 +21,7 @@ int main(int argc, char **argv)
 
   ros::Time prevTime = ros::Time::now();
 
-  ros::Rate loop_rate(10);
+  ros::Rate loop_rate(robot_cfg.loop_rate);  // ROS Rate Hz
 
   while (ros::ok())
   {

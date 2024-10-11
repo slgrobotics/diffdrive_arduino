@@ -16,7 +16,8 @@
 
 using hardware_interface::return_type;
 
-class DiffDriveArduino : public hardware_interface::SystemInterface
+class DiffDriveArduino
+ : public hardware_interface::SystemInterface
 {
 
 
@@ -52,7 +53,11 @@ private:
   rclcpp::Logger logger_;
 
   std::chrono::time_point<std::chrono::system_clock> time_;
-  
+
+  int bat_cnt_ = 0;
+
+  void publishBatteryState();
+
 };
 
 

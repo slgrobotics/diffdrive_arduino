@@ -64,7 +64,7 @@ void ArduinoComms::readGpsValues(std::string &values)
     values = response;
 }
 
-void ArduinoComms::readHealthValues(int &mv_per_cell, int &current_ma, int &free_mem_bytes)
+void ArduinoComms::readHealthValues(int &battery_mv, int &current_ma, int &free_mem_bytes)
 {
     std::string response = sendMsg("h\r");
 
@@ -74,9 +74,9 @@ void ArduinoComms::readHealthValues(int &mv_per_cell, int &current_ma, int &free
     
     if(results.size() == 3)
     {
-        mv_per_cell = std::atoi(results.at(0).c_str());
-        current_ma = std::atoi(results.at(1).c_str());
-        free_mem_bytes = std::atoi(results.at(2).c_str());
+        battery_mv = std::atoi(results.at(0).c_str());      // normally around 12600 (mv)
+        current_ma = std::atoi(results.at(1).c_str());      // not measured - -1
+        free_mem_bytes = std::atoi(results.at(2).c_str());  // normally around 7150
     }
 }
 
