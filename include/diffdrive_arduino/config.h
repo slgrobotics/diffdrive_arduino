@@ -1,5 +1,4 @@
-#ifndef DIFFDRIVE_ARDUINO_CONFIG_H
-#define DIFFDRIVE_ARDUINO_CONFIG_H
+#pragma once
 
 #include <string>
 
@@ -15,6 +14,3 @@ struct Config
   int enc_counts_per_rev = 1920;
   float wheels_pwm_factor = 1.0;
 };
-
-
-#endif // DIFFDRIVE_ARDUINO_CONFIG_H

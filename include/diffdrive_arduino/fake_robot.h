@@ -1,6 +1,4 @@
-#ifndef DIFFDRIVE_ARDUINO_FAKE_ROBOT_H
-#define DIFFDRIVE_ARDUINO_FAKE_ROBOT_H
-
+#pragma once
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -52,6 +50,3 @@ private:
   std::chrono::time_point<std::chrono::system_clock> time_;
   
 };
-
-
-#endif // DIFFDRIVE_ARDUINO_FAKE_ROBOT_H

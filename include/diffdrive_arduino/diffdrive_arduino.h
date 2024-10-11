@@ -1,5 +1,4 @@
-#ifndef DIFFDRIVE_ARDUINO_REAL_ROBOT_H
-#define DIFFDRIVE_ARDUINO_REAL_ROBOT_H
+#pragma once
 
 #include <cstring>
 #include "rclcpp/rclcpp.hpp"
@@ -59,6 +58,3 @@ private:
   void publishBatteryState();
 
 };
-
-
-#endif // DIFFDRIVE_ARDUINO_REAL_ROBOT_H

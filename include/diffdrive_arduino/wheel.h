@@ -1,9 +1,6 @@
-#ifndef DIFFDRIVE_ARDUINO_WHEEL_H
-#define DIFFDRIVE_ARDUINO_WHEEL_H
+#pragma once
 
 #include <string>
-
-
 
 class Wheel
 {
@@ -25,10 +22,4 @@ class Wheel
     void setup(const std::string &wheel_name, int counts_per_rev);
 
     double calcEncAngle();
-
-
-
 };
-
-
-#endif // DIFFDRIVE_ARDUINO_WHEEL_H
