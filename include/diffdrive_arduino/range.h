@@ -1,0 +1,19 @@
+#pragma once
+
+#include <string>
+
+class Range
+{
+    public:
+
+    std::string name = "";
+    double range = 0.0;
+
+    Range() = default;
+
+    Range(const std::string &range_name);
+    
+    void setup(const std::string &range_name);
+
+    double getRange();
+};

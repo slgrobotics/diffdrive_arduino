@@ -11,6 +11,8 @@
 
 #include "config.h"
 #include "wheel.h"
+#include "range.h"
+#include "battery.h"
 #include "arduino_comms.h"
 
 using hardware_interface::return_type;
@@ -18,7 +20,6 @@ using hardware_interface::return_type;
 class DiffDriveArduino
  : public hardware_interface::SystemInterface
 {
-
 
 public:
   DiffDriveArduino();
@@ -39,8 +40,6 @@ public:
   hardware_interface::return_type write(
     const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
-
-
 private:
 
   Config cfg_;
@@ -49,12 +48,20 @@ private:
   Wheel l_wheel_;
   Wheel r_wheel_;
 
+  Range range_f_l_;
+  Range range_f_r_;
+  Range range_b_l_;
+  Range range_b_r_;
+
+  Battery battery_;
+
   rclcpp::Logger logger_;
 
   std::chrono::time_point<std::chrono::system_clock> time_;
 
+  int battery_mv, current_ma, free_mem_bytes;
+  int front_right, front_left, back_right, back_left; // centimeters
+
   int bat_cnt_ = 0;
-
-  void publishBatteryState();
-
+  int print_cnt_ = 0;
 };

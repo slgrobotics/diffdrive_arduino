@@ -30,9 +30,18 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   cfg_.timeout = std::stoi(info_.hardware_parameters["timeout"]);
   cfg_.enc_counts_per_rev = std::stoi(info_.hardware_parameters["enc_counts_per_rev"]);
 
-  // Set up the wheels
+  // Set up the wheels:
   l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev);
   r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev);
+
+  // Set up the ultrasonic sensors:
+  range_f_l_.setup("sonar_F_L");
+  range_f_r_.setup("sonar_F_R");
+  range_b_l_.setup("sonar_B_L");
+  range_b_r_.setup("sonar_B_R");
+
+  // Set up the Batery:
+  battery_.setup("battery");
 
   // Set up the Arduino
   arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);  
@@ -53,6 +62,13 @@ std::vector<hardware_interface::StateInterface> DiffDriveArduino::export_state_i
   state_interfaces.emplace_back(hardware_interface::StateInterface(r_wheel_.name, hardware_interface::HW_IF_VELOCITY, &r_wheel_.vel));
   state_interfaces.emplace_back(hardware_interface::StateInterface(r_wheel_.name, hardware_interface::HW_IF_POSITION, &r_wheel_.pos));
 
+  state_interfaces.emplace_back(hardware_interface::StateInterface(range_f_l_.name, "range", &range_f_l_.range));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(range_f_r_.name, "range", &range_f_r_.range));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_l_.name, "range", &range_b_l_.range));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_r_.name, "range", &range_b_r_.range));
+
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "battery", &battery_.voltage));
+
   return state_interfaces;
 }
 
@@ -67,47 +83,6 @@ std::vector<hardware_interface::CommandInterface> DiffDriveArduino::export_comma
 
   return command_interfaces;
 }
-
-/*
-this should be in Broadcaster
-  // See https://answers.ros.org/question/414029/access-ros-node-in-hardware_interface/
-  //     https://github.com/ipa320/ros_battery_monitoring
-
-controller_interface::CallbackReturn DiffDriveArduino::on_configure(const rclcpp_lifecycle::State & / *previous_state* /)
-{
-  RCLCPP_INFO(logger_, "Configuring Arduino Controller...");
-
-  battery_state_pub_ = getNode()->create_publisher<sensor_msgs::msg::BatteryState>("~/battery_state", rclcpp::SystemDefaultsQoS());
-
-  realtime_publisher_ =
-      std::make_unique<realtime_tools::RealtimePublisher<sensor_msgs::msg::BatteryState>>(battery_state_pub_);
-
-  realtime_publisher_->msg_.temperature = std::numeric_limits<double>::quiet_NaN();
-  realtime_publisher_->msg_.current = std::numeric_limits<double>::quiet_NaN();
-  realtime_publisher_->msg_.charge = std::numeric_limits<double>::quiet_NaN();
-  realtime_publisher_->msg_.capacity = std::numeric_limits<double>::quiet_NaN();
-  realtime_publisher_->msg_.design_capacity = std::numeric_limits<double>::quiet_NaN();
-  realtime_publisher_->msg_.percentage = std::numeric_limits<double>::quiet_NaN();
-  realtime_publisher_->msg_.power_supply_status = sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
-  realtime_publisher_->msg_.power_supply_health = sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
-  realtime_publisher_->msg_.power_supply_technology = sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
-  realtime_publisher_->msg_.present = true;
-
-  int64_t psu_tech = get_node()->get_parameter("power_supply_technology").as_int();
-  if (psu_tech != -1)
-  {
-    realtime_publisher_->msg_.power_supply_technology = psu_tech;
-  }
-
-  double design_capacity = get_node()->get_parameter("design_capacity").as_double();
-  if (design_capacity != 0.0)
-  {
-    realtime_publisher_->msg_.design_capacity = static_cast<float>(design_capacity);
-  }
-
-  return CallbackReturn::SUCCESS;
-}
-*/
 
 hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_lifecycle::State & /*previous_state*/)
 {
@@ -146,6 +121,7 @@ hardware_interface::return_type DiffDriveArduino::read(
   auto new_time = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = new_time - time_;
   double deltaSeconds = diff.count();
+
   time_ = new_time;
 
 
@@ -166,39 +142,32 @@ hardware_interface::return_type DiffDriveArduino::read(
   r_wheel_.pos = r_wheel_.calcEncAngle();
   r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds; //(double)period.nanoseconds();
 
-  publishBatteryState();
-
-  //int front_right, front_left, back_right, back_left; // centimeters
-
-  //arduino_.readPingValues(front_right, front_left, back_right, back_left);
-
-  //RCLCPP_INFO(logger_, "Ping: %d  %d %d  %d", front_right, front_left, back_right, back_left);
-
-  //std::string gps_values_str;
-
-  //arduino_.readGpsValues(gps_values_str);
-
-  //RCLCPP_INFO(logger_, "GPS: %s", gps_values_str.c_str());
-
-  return return_type::OK;
-}
-
-void DiffDriveArduino::publishBatteryState()
-{
-  if((++bat_cnt_) > 100)
+  if((++bat_cnt_) > 10)
   {
     bat_cnt_ = 0;
 
-    int battery_mv, current_ma, free_mem_bytes;
-
     arduino_.readHealthValues(battery_mv, current_ma, free_mem_bytes);
 
-    RCLCPP_INFO(logger_, "Battery Health: %d mV     %d mA    %d bytes free", battery_mv, current_ma, free_mem_bytes);
-
-    //auto message = sensor_msgs::msg::BatteryState();
-
-    //battery_state_pub_->publish(message);
+    battery_.voltage = ((double)battery_mv) / 1000.0;
   }
+
+  arduino_.readPingValues(front_right, front_left, back_right, back_left);
+
+  range_f_l_.range = ((double)front_left) / 100.0; // meters
+  range_f_r_.range = ((double)front_right) / 100.0;
+  range_b_l_.range = ((double)back_left) / 100.0;
+  range_b_r_.range = ((double)back_right) / 100.0;
+
+  if((++print_cnt_) > 100)
+  {
+    print_cnt_ = 0;
+
+    RCLCPP_INFO(logger_, "Battery Health: %.2f V     %d mA    %d mem bytes free", battery_.getVoltage(), current_ma, free_mem_bytes);
+
+    RCLCPP_INFO(logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters", range_f_l_.getRange(), range_f_r_.getRange(), range_b_l_.getRange(), range_b_r_.getRange());
+  }
+
+  return return_type::OK;
 }
 
 hardware_interface::return_type DiffDriveArduino::write(
