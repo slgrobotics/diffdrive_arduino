@@ -65,3 +65,4 @@ private:
   int bat_cnt_ = 0;
   int print_cnt_ = 0;
 };
+

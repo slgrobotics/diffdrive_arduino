@@ -57,13 +57,6 @@ void ArduinoComms::readEncoderValues(int &val_1, int &val_2)
     }
 }
 
-void ArduinoComms::readGpsValues(std::string &values)
-{
-    std::string response = sendMsg("g\r");
-
-    values = response;
-}
-
 void ArduinoComms::readHealthValues(int &battery_mv, int &current_ma, int &free_mem_bytes)
 {
     std::string response = sendMsg("h\r");
@@ -120,7 +113,6 @@ void ArduinoComms::setPidValues(float k_p, float k_d, float k_i, float k_o)
 #define PIN_MODE       'c'
 #define DIGITAL_READ   'd'
 #define READ_ENCODERS  'e'
-#define READ_GPS       'g'
 #define READ_HEALTH    'h'
 #define MOTOR_SPEEDS   'm'
 #define MOTOR_RAW_PWM  'o'
@@ -162,7 +154,6 @@ std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_out
         case GET_BAUDRATE:
         case DIGITAL_READ:
         case READ_ENCODERS:
-        case READ_GPS:
         case READ_HEALTH:
         case SONAR_PING:
         case SERVO_READ:
