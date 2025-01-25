@@ -148,21 +148,22 @@ hardware_interface::return_type DiffDriveArduino::read(
 
     arduino_.readHealthValues(battery_mv, current_ma, free_mem_bytes);
 
-    battery_.voltage = ((double)battery_mv) / 1000.0;
+    battery_.setVoltage(battery_mv);
+    battery_.setCurrent(current_ma);
   }
 
   arduino_.readPingValues(front_right, front_left, back_right, back_left);
 
-  range_f_l_.range = ((double)front_left) / 100.0; // meters
-  range_f_r_.range = ((double)front_right) / 100.0;
-  range_b_l_.range = ((double)back_left) / 100.0;
-  range_b_r_.range = ((double)back_right) / 100.0;
+  range_f_l_.setRange(front_left); // meters
+  range_f_r_.setRange(front_right);
+  range_b_l_.setRange(back_left);
+  range_b_r_.setRange(back_right);
 
   if((++print_cnt_) > 100)
   {
     print_cnt_ = 0;
 
-    RCLCPP_INFO(logger_, "Battery Health: %.2f V     %d mA    %d mem bytes free", battery_.getVoltage(), current_ma, free_mem_bytes);
+    RCLCPP_INFO(logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free", battery_.getVoltage(), battery_.getCurrent(), free_mem_bytes);
 
     RCLCPP_INFO(logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters", range_f_l_.getRange(), range_f_r_.getRange(), range_b_l_.getRange(), range_b_r_.getRange());
   }
