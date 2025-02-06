@@ -59,7 +59,7 @@ private:
 
   std::chrono::time_point<std::chrono::system_clock> time_;
 
-  int battery_mv, current_ma, free_mem_bytes;
+  int voltage_mv, current_ma, free_mem_bytes;
   int front_right, front_left, back_right, back_left; // centimeters
 
   int bat_cnt_ = 0;

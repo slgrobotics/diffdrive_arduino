@@ -41,7 +41,13 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   range_b_r_.setup("sonar_B_R");
 
   // Set up the Batery:
-  battery_.setup("battery");
+  battery_.setup(info_.hardware_parameters["battery_name"], std::stoi(info_.hardware_parameters["battery_num_cells"]));
+
+  battery_.setPowerSupplyTechnology(std::stoi(info_.hardware_parameters["battery_technology"]));
+
+  battery_.setDesignCapacity(std::stof(info_.hardware_parameters["battery_design_capacity"]));
+
+  battery_.setCapacity(battery_.capacity);
 
   // Set up the Arduino
   arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);  
@@ -67,7 +73,14 @@ std::vector<hardware_interface::StateInterface> DiffDriveArduino::export_state_i
   state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_l_.name, "range", &range_b_l_.range));
   state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_r_.name, "range", &range_b_r_.range));
 
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "battery", &battery_.voltage));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "voltage", &battery_.voltage));
+  /*
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "temperature", &battery_.temperature));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "current", &battery_.current));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "charge", &battery_.charge));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "capacity", &battery_.capacity));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "percentage", &battery_.percentage));
+  */
 
   return state_interfaces;
 }
@@ -136,20 +149,24 @@ hardware_interface::return_type DiffDriveArduino::read(
 
   double pos_prev = l_wheel_.pos;
   l_wheel_.pos = l_wheel_.calcEncAngle();
-  l_wheel_.vel = (l_wheel_.pos - pos_prev) / deltaSeconds; // (double)period.nanoseconds();
+  l_wheel_.vel = (l_wheel_.pos - pos_prev) / deltaSeconds;
 
   pos_prev = r_wheel_.pos;
   r_wheel_.pos = r_wheel_.calcEncAngle();
-  r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds; //(double)period.nanoseconds();
+  r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds;
 
   if((++bat_cnt_) > 10)
   {
     bat_cnt_ = 0;
 
-    arduino_.readHealthValues(battery_mv, current_ma, free_mem_bytes);
+    arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes);
 
-    battery_.setVoltage(battery_mv);
-    battery_.setCurrent(current_ma);
+    battery_.setVoltage(((double)voltage_mv) / 1000.0); // Volts
+    //battery_.setTemperature(21.0f);
+    battery_.setCurrent(-((double)current_ma) / 1000.0); // Amperes
+    battery_.setPercentage();
+    battery_.setCharge(battery_.design_capacity * battery_.percentage);
+    //battery_.setCapacity(0.0f);
   }
 
   arduino_.readPingValues(front_right, front_left, back_right, back_left);
@@ -163,7 +180,7 @@ hardware_interface::return_type DiffDriveArduino::read(
   {
     print_cnt_ = 0;
 
-    RCLCPP_INFO(logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free", battery_.getVoltage(), battery_.getCurrent(), free_mem_bytes);
+    RCLCPP_INFO(logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free", battery_.voltage, battery_.current, free_mem_bytes);
 
     RCLCPP_INFO(logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters", range_f_l_.getRange(), range_f_r_.getRange(), range_b_l_.getRange(), range_b_r_.getRange());
   }
@@ -174,7 +191,6 @@ hardware_interface::return_type DiffDriveArduino::read(
 hardware_interface::return_type DiffDriveArduino::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-
   if (!arduino_.connected())
   {
     return return_type::ERROR;
@@ -204,12 +220,7 @@ hardware_interface::return_type DiffDriveArduino::write(
   arduino_.setMotorValues(l_cmd, r_cmd);
 
   return return_type::OK;
-
-
-  
 }
-
-
 
 #include "pluginlib/class_list_macros.hpp"
 
