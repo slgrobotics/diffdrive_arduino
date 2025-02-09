@@ -49,7 +49,7 @@ class Battery
 
     inline void setPowerSupplyTechnology(uint8_t val) { power_supply_technology = val; }
 
-    inline void setDesignCapacity(double design_capacity_ah) { capacity = design_capacity_ah; }
+    inline void setDesignCapacity(double design_capacity_ah) { design_capacity = design_capacity_ah; }
 
     // Only dynamic values are supplied by the Base driver interfaces.
     // We want setters because of possible conversions to "double":
@@ -60,9 +60,9 @@ class Battery
 
     inline void setCurrent(int current_amps) { current = current_amps; }
 
-    void setCharge(int current_charge_ah);
+    inline void setCharge(int charge_ah) { charge = charge_ah; }
 
-    void setCapacity(double capacity_ah);
+    inline void setCapacity(double capacity_ah) { capacity = capacity_ah; }
 
     void setPercentage(); // based on voltage
 

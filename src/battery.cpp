@@ -7,16 +7,6 @@ void Battery::setup(const std::string &battery_name, int number_of_cells)
   num_cells = number_of_cells;
 }
 
-void Battery::setCharge(int current_charge_ah)
-{
-  charge = current_charge_ah; // Amp-Hours 
-}
-
-void Battery::setCapacity(double capacity_ah)
-{
-  capacity = capacity_ah; // Amp-Hours
-}
-
 void Battery::setPercentage() // based on voltage
 {
   // See https://www.jackery.com/blogs/knowledge/ultimate-guide-to-lifepo4-voltage-chart
