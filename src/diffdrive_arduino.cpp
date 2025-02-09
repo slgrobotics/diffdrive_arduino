@@ -40,14 +40,12 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   range_b_l_.setup("sonar_B_L");
   range_b_r_.setup("sonar_B_R");
 
-  // Set up the Batery:
+  // Set up the Batery, some parameters are needed for "percentage" and other calculations:
   battery_.setup(info_.hardware_parameters["battery_name"], std::stoi(info_.hardware_parameters["battery_num_cells"]));
 
   battery_.setPowerSupplyTechnology(std::stoi(info_.hardware_parameters["battery_technology"]));
 
   battery_.setDesignCapacity(std::stof(info_.hardware_parameters["battery_design_capacity"]));
-
-  battery_.setCapacity(battery_.capacity);
 
   // Set up the Arduino
   arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);  
@@ -74,13 +72,14 @@ std::vector<hardware_interface::StateInterface> DiffDriveArduino::export_state_i
   state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_r_.name, "range", &range_b_r_.range));
 
   state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "voltage", &battery_.voltage));
-  /*
   state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "temperature", &battery_.temperature));
   state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "current", &battery_.current));
   state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "charge", &battery_.charge));
   state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "capacity", &battery_.capacity));
   state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "percentage", &battery_.percentage));
-  */
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "power_supply_status", &battery_.power_supply_status));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "power_supply_health", &battery_.power_supply_health));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "present", &battery_.present));
 
   return state_interfaces;
 }
@@ -165,8 +164,11 @@ hardware_interface::return_type DiffDriveArduino::read(
     //battery_.setTemperature(21.0f);
     battery_.setCurrent(-((double)current_ma) / 1000.0); // Amperes
     battery_.setPercentage();
-    battery_.setCharge(battery_.design_capacity * battery_.percentage);
-    //battery_.setCapacity(0.0f);
+    battery_.setCapacity(battery_.design_capacity);
+    battery_.setCharge(battery_.capacity * battery_.percentage);
+    battery_.setPresent(battery_.voltage > 1.0);
+    battery_.setPowerSupplyStatus(battery_.voltage > 14.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
+    battery_.setPowerSupplyHealth(battery_.voltage > 11.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD : sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN);
   }
 
   arduino_.readPingValues(front_right, front_left, back_right, back_left);

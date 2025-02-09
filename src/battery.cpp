@@ -21,7 +21,7 @@ void Battery::setPercentage() // based on voltage
 {
   // See https://www.jackery.com/blogs/knowledge/ultimate-guide-to-lifepo4-voltage-chart
 
-  switch(power_supply_technology) {
+  switch((int)round(power_supply_technology)) {
 
     case sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_NIMH: // 1    # Nickel-Metal Hydride battery
       break;
