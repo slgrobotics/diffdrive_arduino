@@ -160,11 +160,11 @@ hardware_interface::return_type DiffDriveArduino::read(
 
     arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes);
 
-    battery_.setVoltage(((double)voltage_mv) / 1000.0); // Volts
-    //battery_.setTemperature(21.0f);
-    battery_.setCurrent(-((double)current_ma) / 1000.0); // Amperes
-    battery_.setPercentage();
-    battery_.setCapacity(battery_.design_capacity);
+    battery_.setVoltage(((double)voltage_mv) / 1000.0);   // Volts
+    battery_.setTemperature(21.0f);                       // Celcius
+    battery_.setCurrent(-((double)current_ma) / 1000.0);  // Amperes
+    battery_.setPercentage();                             // in 0...1.0 range. Calculate it first from Voltage
+    battery_.setCapacity(battery_.design_capacity * 0.9); // can't directly inquire it. Can be lower than design_capacity
     battery_.setCharge(battery_.capacity * battery_.percentage);
     battery_.setPresent(battery_.voltage > 1.0);
     battery_.setPowerSupplyStatus(battery_.voltage > 14.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
