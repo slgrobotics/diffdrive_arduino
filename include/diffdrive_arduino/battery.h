@@ -54,13 +54,13 @@ class Battery
     // Only dynamic values are supplied by the Base driver interfaces.
     // We want setters because of possible conversions to "double":
 
-    inline void setVoltage(int volts) { voltage = volts; }
+    inline void setVoltage(double volts) { voltage = volts; }
 
     inline void setTemperature(double temp_deg_celcius) { temperature = temp_deg_celcius; }
 
-    inline void setCurrent(int current_amps) { current = current_amps; }
+    inline void setCurrent(double current_amps) { current = current_amps; }
 
-    inline void setCharge(int charge_ah) { charge = charge_ah; }
+    inline void setCharge(double charge_ah) { charge = charge_ah; }
 
     inline void setCapacity(double capacity_ah) { capacity = capacity_ah; }
 
