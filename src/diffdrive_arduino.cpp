@@ -29,6 +29,7 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   cfg_.baud_rate = std::stoi(info_.hardware_parameters["baud_rate"]);
   cfg_.timeout = std::stoi(info_.hardware_parameters["timeout"]);
   cfg_.enc_counts_per_rev = std::stoi(info_.hardware_parameters["enc_counts_per_rev"]);
+  cfg_.wheels_pwm_factor = std::stof(info_.hardware_parameters["wheels_pwm_factor"]);
 
   // Set up the wheels:
   l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev);
@@ -190,6 +191,15 @@ hardware_interface::return_type DiffDriveArduino::read(
   return return_type::OK;
 }
 
+int roundAndLimit(double val)
+{
+  int ival = (int)round(val);
+
+  ival = std::min(std::max(ival, -100), 100);
+
+  return ival;
+}
+
 hardware_interface::return_type DiffDriveArduino::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
@@ -198,26 +208,13 @@ hardware_interface::return_type DiffDriveArduino::write(
     return return_type::ERROR;
   }
 
-  //RCLCPP_INFO(logger_, "cmd: %f  sending: %f", l_wheel_.cmd, l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate);
+  // Arduino expects wheel speed setpoints in the range -100..100 (percent of max speed)
+  // Use wheels_pwm_factor parameter to bring interface speed input into this range
 
-  // Desired speed is set by Comm (Rpi -> Arduino)
-  // comes in the range -100...100 - it has a meaning of "percent of max possible speed":
-  // For Plucky full wheel rotation at full power takes 3.8 seconds.
-  // So, with R_wheel = 0.192m max speed is:
-  //   - 0.317 m/sec
-  //   - 1.65 rad/sec
-  //   - 660 encoder ticks/sec
+  int l_cmd = roundAndLimit(l_wheel_.cmd * cfg_.wheels_pwm_factor);
+  int r_cmd = roundAndLimit(r_wheel_.cmd * cfg_.wheels_pwm_factor);
 
-  // With ROS2 Joystick at full forward:
-  //   Normal mode: cmd_vel.linear.x=0.7, l_cmd=50
-  //   Turbo mode:  cmd_vel.linear.x=1.4, l_cmd=107
-
-  double wheels_pwm_factor = 1.0;  // account for Plucky wheels "m pwm pwm" command. Turbo joystick mode sends 107 to wheels. 
-
-  double l_cmd = l_wheel_.cmd / l_wheel_.rads_per_count / cfg_.loop_rate * wheels_pwm_factor;
-  double r_cmd = r_wheel_.cmd / r_wheel_.rads_per_count / cfg_.loop_rate * wheels_pwm_factor;
-
-  //RCLCPP_INFO(logger_, "cmd: %f  sending: %f", l_wheel_.cmd, l_cmd);
+  //RCLCPP_INFO(logger_, "cmds: %f %f  sending: %d %d", l_wheel_.cmd, r_wheel_.cmd, l_cmd, r_cmd);
 
   arduino_.setMotorValues(l_cmd, r_cmd);
 
