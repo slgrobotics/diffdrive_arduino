@@ -12,6 +12,6 @@ For matching Arduino IDE code see:
 
 Please refer to https://github.com/slgrobotics/robots_bringup for detailed instructions.
 
-Original code by Articulated Robotics (Josh Newans):
+**Credits:** Original code by Articulated Robotics (Josh Newans):
 
 https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
