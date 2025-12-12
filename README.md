@@ -5,6 +5,8 @@ which connects to an Arduino Mega 2560, Teensy 4.x or RPi Pico.
 
 Uses simple strings-based protocol to communicate to microcontroller, which controls wheels motors and encoders, monitors battery and may control some sensors (e.g. sonars).
 
+Here is an explanation of [how it works](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/MakeYourOwn/README.md#base-control---the-arduino-way).
+
 For matching Arduino IDE code see:
 - https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/DraggerROS
 - https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/PluckyWheelsROS
