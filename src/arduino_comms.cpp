@@ -1,4 +1,5 @@
 #include "diffdrive_arduino/arduino_comms.h"
+#include "diffdrive_arduino/encoder_parser.h"
 // #include <ros/console.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sstream>
@@ -37,7 +38,7 @@ void ArduinoComms::sendEmptyMsg()
     } while (response.length() > 0 && --tries > 0);
 }
 
-void ArduinoComms::readEncoderValues(int &val_1, int &val_2)
+bool ArduinoComms::readEncoderValues(int &val_1, int &val_2)
 {
     //std::cout << "...polling encoders..." << std::endl;
 
@@ -45,16 +46,7 @@ void ArduinoComms::readEncoderValues(int &val_1, int &val_2)
 
     //std::cout << "response: " << response << std::endl;
 
-    if(response.length() >= 5)
-    {
-        std::string delimiter = " ";
-        size_t del_pos = response.find(delimiter);
-        std::string token_1 = response.substr(0, del_pos);
-        std::string token_2 = response.substr(del_pos + delimiter.length());
-
-        val_1 = std::atoi(token_1.c_str());
-        val_2 = std::atoi(token_2.c_str());
-    }
+    return parseEncoderValues(response, val_1, val_2);
 }
 
 void ArduinoComms::readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes)
@@ -165,9 +157,9 @@ std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_out
 
 #endif // EXPECT_RESPONSE_OK
 
-    if(response.length() == 0)
+    if(response.length() < 3 || response[1] != ' ' || response.back() != '\r')
     {
-        std::cout << "Error: Arduino empty response for cmd '" << msg_to_send << "'" << std::endl;
+        std::cout << "Error: Arduino incomplete or malformed response for cmd '" << msg_to_send << "'" << std::endl;
         return "";
     }
 

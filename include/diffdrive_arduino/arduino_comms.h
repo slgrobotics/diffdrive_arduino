@@ -20,7 +20,7 @@ public:
 
   void sendEmptyMsg();
   
-  void readEncoderValues(int &val_1, int &val_2);
+  bool readEncoderValues(int &val_1, int &val_2);
   void readHealthValues(int &mv_per_cell, int &current_ma, int &free_mem_bytes);
   void readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
 
