@@ -1,6 +1,7 @@
 **Credits:** Original code by Articulated Robotics (Josh Newans):
 
-https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
+- https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
+- https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-real#getting-the-hardware-interface
 
 ## diffdrive_arduino - a unified ROS2 *base* driver 
 
