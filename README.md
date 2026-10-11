@@ -1,8 +1,24 @@
+>
+> This is original https://github.com/joshnewans/diffdrive_arduino code which I asked ChatGPT to fix at its discretion.
+>
+> Fixed the stability issues in diffdrive_arduino:
+> - Encoder baselines, rollover handling, and discontinuity detection.
+> - Period-based velocity calculation.
+> - Strict serial parsing, bounded timeouts, and exception handling.
+> - Explicit stopping on deactivation; best-effort stop and disconnect on faults.
+> - Configuration and command validation.
+> - Runnable Lyrical launch examples and updated documentation.
+> Validation passed: Lyrical build, 17 regression tests, and a full fake-robot launch verifying movement and stale-command stopping.
+> **Physical hardware remains untested**. Parameters and recovery behavior are documented in the README.
+>
+> The **["non-zeroed encoders" problem](https://github.com/slgrobotics/diffdrive_arduino/tree/jn-lyrical-allfixes#encoder-and-fault-behavior)** hit me specifically while porting my code to Lyrical - the robot started 24 km from odom and map frames. Taking initial encoder values as offset solved it.
+-----------------------------------
+
 # diffdrive_arduino
 
 ROS 2 Lyrical ros2_control hardware plugins for a two-wheel differential drive:
 
-- `diffdrive_arduino/DiffDriveArduino` communicates with ROSArduinoBridge firmware.
+- `diffdrive_arduino/DiffDriveArduino` communicates with [ROSArduinoBridge firmware](https://github.com/joshnewans/ros_arduino_bridge).
 - `fake_robot/FakeRobot` integrates commanded wheel velocities without hardware.
 
 ## Build and test
