@@ -22,4 +22,8 @@ class Wheel
     void setup(const std::string &wheel_name, int counts_per_rev);
 
     double calcEncAngle();
+
+    // Rebase raw counters without changing the exposed joint position.
+    void setEncoderBaseline(int count);
+    void updateEncoder(int count, double elapsed_seconds);
 };

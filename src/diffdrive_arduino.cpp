@@ -20,7 +20,7 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
 
   RCLCPP_INFO(logger_, "Configuring...");
 
-  time_ = std::chrono::system_clock::now();
+  time_ = std::chrono::steady_clock::now();
 
   cfg_.left_wheel_name = info_.hardware_parameters["left_wheel_name"];
   cfg_.right_wheel_name = info_.hardware_parameters["right_wheel_name"];
@@ -101,13 +101,41 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_li
 {
   RCLCPP_INFO(logger_, "Starting Arduino Controller...");
 
-  arduino_.sendEmptyMsg();
-  //arduino_.sendEmptyMsg();
-  //arduino_.sendEmptyMsg();
-  // arduino.setPidValues(9,7,0,100);
-  // arduino.setPidValues(14,7,0,100);
-  sleep(1);
-  arduino_.setPidValues(30, 20, 0, 100);
+  encoders_initialized_ = false;
+  l_wheel_.cmd = r_wheel_.cmd = 0.0;
+  if (!arduino_.connected())
+  {
+    return CallbackReturn::ERROR;
+  }
+
+  try
+  {
+    arduino_.sendEmptyMsg();
+    //arduino_.sendEmptyMsg();
+    //arduino_.sendEmptyMsg();
+    // arduino.setPidValues(9,7,0,100);
+    // arduino.setPidValues(14,7,0,100);
+    sleep(1);
+    arduino_.setPidValues(30, 20, 0, 100);
+    arduino_.setMotorValues(0, 0);
+
+    int left, right;
+    if (!arduino_.readEncoderValues(left, right))
+    {
+      RCLCPP_ERROR(logger_, "Cannot activate: invalid encoder baseline response");
+      return CallbackReturn::ERROR;
+    }
+    l_wheel_.setEncoderBaseline(left);
+    r_wheel_.setEncoderBaseline(right);
+    time_ = std::chrono::steady_clock::now();
+    encoders_initialized_ = true;
+    RCLCPP_INFO(logger_, "Encoder baseline: left=%d right=%d", left, right);
+  }
+  catch (const std::exception &error)
+  {
+    RCLCPP_ERROR(logger_, "Cannot activate Arduino hardware: %s", error.what());
+    return CallbackReturn::ERROR;
+  }
 
   return CallbackReturn::SUCCESS;
 }
@@ -115,6 +143,22 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_li
 hardware_interface::CallbackReturn DiffDriveArduino::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(logger_, "Stopping Arduino Controller...");
+
+  encoders_initialized_ = false;
+  l_wheel_.cmd = r_wheel_.cmd = 0.0;
+  l_wheel_.vel = r_wheel_.vel = 0.0;
+  try
+  {
+    if (arduino_.connected())
+    {
+      arduino_.setMotorValues(0, 0);
+    }
+  }
+  catch (const std::exception &error)
+  {
+    RCLCPP_ERROR(logger_, "Cannot stop Arduino hardware: %s", error.what());
+    return CallbackReturn::ERROR;
+  }
 
   return CallbackReturn::SUCCESS;
 }
@@ -128,32 +172,41 @@ hardware_interface::return_type DiffDriveArduino::read(
    * return return_type::OK if the read was successful, return_type::ERROR otherwise.
    */
 
-  // TODO fix chrono duration
-
-  // Calculate time delta
-  auto new_time = std::chrono::system_clock::now();
-  std::chrono::duration<double> diff = new_time - time_;
-  double deltaSeconds = diff.count();
-
-  time_ = new_time;
-
-
   if (!arduino_.connected())
   {
     return return_type::ERROR;
   }
 
-  arduino_.readEncoderValues(l_wheel_.enc, r_wheel_.enc);
-
-  //RCLCPP_INFO(logger_, "enc: %d  %d", l_wheel_.enc, r_wheel_.enc);
-
-  double pos_prev = l_wheel_.pos;
-  l_wheel_.pos = l_wheel_.calcEncAngle();
-  l_wheel_.vel = (l_wheel_.pos - pos_prev) / deltaSeconds;
-
-  pos_prev = r_wheel_.pos;
-  r_wheel_.pos = r_wheel_.calcEncAngle();
-  r_wheel_.vel = (r_wheel_.pos - pos_prev) / deltaSeconds;
+  if (!encoders_initialized_)
+  {
+    // No usable wheel state until activation has established a valid baseline.
+    return return_type::OK;
+  }
+  int left, right;
+  try
+  {
+    if (!arduino_.readEncoderValues(left, right))
+    {
+      RCLCPP_ERROR(logger_, "Invalid encoder response; wheel state unchanged");
+      return return_type::ERROR;
+    }
+  }
+  catch (const std::exception &error)
+  {
+    RCLCPP_ERROR(logger_, "Encoder read failed: %s", error.what());
+    return return_type::ERROR;
+  }
+  // Measure between successful encoder samples using a clock immune to wall-time jumps.
+  const auto new_time = std::chrono::steady_clock::now();
+  const double deltaSeconds = std::chrono::duration<double>(new_time - time_).count();
+  if (!std::isfinite(deltaSeconds) || deltaSeconds <= 0.0)
+  {
+    RCLCPP_ERROR(logger_, "Invalid encoder sample interval");
+    return return_type::ERROR;
+  }
+  l_wheel_.updateEncoder(left, deltaSeconds);
+  r_wheel_.updateEncoder(right, deltaSeconds);
+  time_ = new_time;
 
   if((++bat_cnt_) > 10)
   {

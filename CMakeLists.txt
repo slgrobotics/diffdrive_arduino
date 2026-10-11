@@ -67,4 +67,13 @@ ament_export_dependencies(
   pluginlib
 )
 
+if(BUILD_TESTING)
+  enable_testing()
+  find_package(diff_drive_controller REQUIRED)
+  add_executable(encoder_regression_test tests/encoder_regression_test.cpp src/wheel.cpp)
+  target_include_directories(encoder_regression_test PRIVATE include)
+  target_link_libraries(encoder_regression_test PRIVATE diff_drive_controller::diff_drive_controller)
+  add_test(NAME encoder_regression_test COMMAND encoder_regression_test)
+endif()
+
 ament_package()

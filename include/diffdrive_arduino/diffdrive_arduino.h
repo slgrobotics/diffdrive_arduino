@@ -57,10 +57,11 @@ private:
 
   rclcpp::Logger logger_;
 
-  std::chrono::time_point<std::chrono::system_clock> time_;
+  std::chrono::time_point<std::chrono::steady_clock> time_;
+  bool encoders_initialized_ = false;
 
-  int voltage_mv, current_ma, free_mem_bytes;
-  int front_right, front_left, back_right, back_left; // centimeters
+  int voltage_mv = 0, current_ma = 0, free_mem_bytes = 0;
+  int front_right = 0, front_left = 0, back_right = 0, back_left = 0; // centimeters
 
   int bat_cnt_ = 0;
   int print_cnt_ = 0;
