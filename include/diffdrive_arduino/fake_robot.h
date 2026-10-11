@@ -28,6 +28,10 @@ public:
 
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_shutdown(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state) override;
+
   CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
 
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
@@ -47,7 +51,8 @@ private:
 
   rclcpp::Logger logger_;
 
-  std::chrono::time_point<std::chrono::system_clock> time_;
+  bool active_ = false;
+  void clear_commands();
   
 };
 

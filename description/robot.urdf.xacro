@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diffdrive_arduino_example">
+  <xacro:arg name="use_fake_hardware" default="true"/>
+  <xacro:arg name="device" default="/dev/ttyUSB0"/>
+  <xacro:arg name="baud_rate" default="57600"/>
+  <xacro:arg name="enc_counts_per_rev" default="1920"/>
+  <xacro:arg name="firmware_loop_rate" default="30"/>
+  <xacro:arg name="timeout" default="10"/>
+  <xacro:arg name="startup_delay_ms" default="2000"/>
+
+  <link name="base_link"/>
+  <link name="left_wheel_link"/>
+  <link name="right_wheel_link"/>
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link"/><child link="left_wheel_link"/>
+    <origin xyz="0 0.15 0"/><axis xyz="0 1 0"/>
+  </joint>
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link"/><child link="right_wheel_link"/>
+    <origin xyz="0 -0.15 0"/><axis xyz="0 1 0"/>
+  </joint>
+
+  <ros2_control name="DiffDriveArduino" type="system">
+    <hardware>
+      <xacro:if value="$(arg use_fake_hardware)">
+        <plugin>fake_robot/FakeRobot</plugin>
+      </xacro:if>
+      <xacro:unless value="$(arg use_fake_hardware)">
+        <plugin>diffdrive_arduino/DiffDriveArduino</plugin>
+      </xacro:unless>
+      <param name="left_wheel_name">left_wheel_joint</param>
+      <param name="right_wheel_name">right_wheel_joint</param>
+      <param name="device">$(arg device)</param>
+      <param name="baud_rate">$(arg baud_rate)</param>
+      <param name="enc_counts_per_rev">$(arg enc_counts_per_rev)</param>
+      <param name="loop_rate">$(arg firmware_loop_rate)</param>
+      <param name="timeout">$(arg timeout)</param>
+      <param name="startup_delay_ms">$(arg startup_delay_ms)</param>
+    </hardware>
+    <joint name="left_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/><state_interface name="velocity"/>
+    </joint>
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/><state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+</robot>

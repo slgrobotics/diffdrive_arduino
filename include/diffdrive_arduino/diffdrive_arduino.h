@@ -1,7 +1,7 @@
 #ifndef DIFFDRIVE_ARDUINO_REAL_ROBOT_H
 #define DIFFDRIVE_ARDUINO_REAL_ROBOT_H
 
-#include <cstring>
+#include <exception>
 #include "rclcpp/rclcpp.hpp"
 
 #include "hardware_interface/system_interface.hpp"
@@ -23,12 +23,18 @@ class DiffDriveArduino : public hardware_interface::SystemInterface
 
 public:
   DiffDriveArduino();
+  ~DiffDriveArduino() override;
 
   CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams & params) override;
 
   std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
 
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
+
+  CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_shutdown(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state) override;
 
   CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
 
@@ -50,7 +56,13 @@ private:
 
   rclcpp::Logger logger_;
 
-  std::chrono::time_point<std::chrono::system_clock> time_;
+  bool active_ = false;
+  bool fault_ = false;
+
+  void clear_commands();
+  void seed_encoders();
+  void close_connection() noexcept;
+  return_type fail(const std::exception & error);
   
 };
 
