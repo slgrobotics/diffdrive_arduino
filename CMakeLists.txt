@@ -17,6 +17,7 @@ find_package(hardware_interface REQUIRED)
 find_package(controller_manager REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 add_library(diffdrive_arduino SHARED
   src/diffdrive_arduino.cpp
@@ -38,6 +39,7 @@ target_link_libraries(diffdrive_arduino PRIVATE
   ${serial_LIBRARIES}
   rclcpp::rclcpp
   pluginlib::pluginlib
+  ${sensor_msgs_TARGETS}
 )
 
 pluginlib_export_plugin_description_file(
@@ -65,6 +67,7 @@ ament_export_dependencies(
   serial
   rclcpp
   pluginlib
+  sensor_msgs
 )
 
 if(BUILD_TESTING)
@@ -74,6 +77,10 @@ if(BUILD_TESTING)
   target_include_directories(encoder_regression_test PRIVATE include)
   target_link_libraries(encoder_regression_test PRIVATE diff_drive_controller::diff_drive_controller)
   add_test(NAME encoder_regression_test COMMAND encoder_regression_test)
+  add_executable(battery_interfaces_test tests/battery_interfaces_test.cpp)
+  target_include_directories(battery_interfaces_test PRIVATE include)
+  target_link_libraries(battery_interfaces_test PRIVATE ${hardware_interface_TARGETS} ${sensor_msgs_TARGETS})
+  add_test(NAME battery_interfaces_test COMMAND battery_interfaces_test)
 endif()
 
 ament_package()

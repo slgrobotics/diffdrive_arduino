@@ -56,32 +56,24 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   return CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface> DiffDriveArduino::export_state_interfaces()
+std::vector<hardware_interface::StateInterface::ConstSharedPtr>
+DiffDriveArduino::on_export_state_interfaces()
 {
-  // We need to set up a position and a velocity interface for each wheel
-
-  std::vector<hardware_interface::StateInterface> state_interfaces;
-
-  state_interfaces.emplace_back(hardware_interface::StateInterface(l_wheel_.name, hardware_interface::HW_IF_VELOCITY, &l_wheel_.vel));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(l_wheel_.name, hardware_interface::HW_IF_POSITION, &l_wheel_.pos));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(r_wheel_.name, hardware_interface::HW_IF_VELOCITY, &r_wheel_.vel));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(r_wheel_.name, hardware_interface::HW_IF_POSITION, &r_wheel_.pos));
-
-  state_interfaces.emplace_back(hardware_interface::StateInterface(range_f_l_.name, "range", &range_f_l_.range));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(range_f_r_.name, "range", &range_f_r_.range));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_l_.name, "range", &range_b_l_.range));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(range_b_r_.name, "range", &range_b_r_.range));
-
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "voltage", &battery_.voltage));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "temperature", &battery_.temperature));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "current", &battery_.current));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "charge", &battery_.charge));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "capacity", &battery_.capacity));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "percentage", &battery_.percentage));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "power_supply_status", &battery_.power_supply_status));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "power_supply_health", &battery_.power_supply_health));
-  state_interfaces.emplace_back(hardware_interface::StateInterface(battery_.name, "present", &battery_.present));
-
+  std::vector<hardware_interface::StateInterface::ConstSharedPtr> state_interfaces;
+  auto add = [&](const std::string & name, const char * interface, double * value) {
+    state_interfaces.emplace_back(
+      std::make_shared<hardware_interface::StateInterface>(name, interface, value));
+  };
+  add(l_wheel_.name, hardware_interface::HW_IF_VELOCITY, &l_wheel_.vel);
+  add(l_wheel_.name, hardware_interface::HW_IF_POSITION, &l_wheel_.pos);
+  add(r_wheel_.name, hardware_interface::HW_IF_VELOCITY, &r_wheel_.vel);
+  add(r_wheel_.name, hardware_interface::HW_IF_POSITION, &r_wheel_.pos);
+  add(range_f_l_.name, "range", &range_f_l_.range);
+  add(range_f_r_.name, "range", &range_f_r_.range);
+  add(range_b_l_.name, "range", &range_b_l_.range);
+  add(range_b_r_.name, "range", &range_b_r_.range);
+  const auto batteries = battery_interfaces_.export_interfaces(battery_);
+  state_interfaces.insert(state_interfaces.end(), batteries.begin(), batteries.end());
   return state_interfaces;
 }
 
@@ -223,6 +215,7 @@ hardware_interface::return_type DiffDriveArduino::read(
     battery_.setPresent(battery_.voltage > 1.0);
     battery_.setPowerSupplyStatus(battery_.voltage > 14.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
     battery_.setPowerSupplyHealth(battery_.voltage > 11.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD : sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN);
+    battery_interfaces_.update(battery_);
   }
 
   arduino_.readPingValues(front_right, front_left, back_right, back_left);

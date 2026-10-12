@@ -13,6 +13,7 @@
 #include "wheel.h"
 #include "range.h"
 #include "battery.h"
+#include "battery_interfaces.h"
 #include "arduino_comms.h"
 
 using hardware_interface::return_type;
@@ -26,7 +27,7 @@ public:
 
   CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams & params) override;
 
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
+  std::vector<hardware_interface::StateInterface::ConstSharedPtr> on_export_state_interfaces() override;
 
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
@@ -54,6 +55,7 @@ private:
   Range range_b_r_;
 
   Battery battery_;
+  BatteryInterfaces battery_interfaces_;
 
   rclcpp::Logger logger_;
 
