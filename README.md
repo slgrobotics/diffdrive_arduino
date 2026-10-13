@@ -1,24 +1,47 @@
+See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
+
+
 **Credits:** Original code by Articulated Robotics (Josh Newans):
 
 - https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
 - https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-real#getting-the-hardware-interface
 
-## diffdrive_arduino - a unified ROS2 *base* driver 
+## `diffdrive_arduino` - a unified ROS2 *base* driver 
 
 - Implements *diffdrive_arduino* package ([ros2_control](https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-concepts) interfaces)
-which connects to an Arduino Mega 2560, Teensy 4.x or RPi Pico.
-
+- Connects to an Arduino Mega 2560, Teensy 4.x or RPi Pico.
 - Uses simple strings-based protocol to communicate to microcontroller, which controls wheels motors and encoders, monitors battery and may control some sensors (e.g. sonars).
+- It needs to be cloned on the robots with matching Arduino-style controllers only. No workstation side installs.
+
+> **Note** This "main" branch was updated to work in ROS 2 Lyrical.
+> For *Jazzy* and *Kilted* clone it at hash `4d5c6c6c5b0db3c508759deaa5d02cd4f1caf54a` (Oct 5,2026 6:47 PM CST):
+> ```
+> cd ~/robot_ws/src
+> git clone https://github.com/slgrobotics/diffdrive_arduino.git
+> cd diffdrive_arduino
+> git checkout 4d5c6c6c5b0db3c508759deaa5d02cd4f1caf54a
+> ```
 
 Here is an explanation of [how it works](https://github.com/slgrobotics/robots_bringup/blob/main/Docs/MakeYourOwn/README.md#base-control---the-arduino-way).
 
-For matching Arduino IDE code see:
-- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/DraggerROS
-- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/PluckyWheelsROS
-- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/WheelsROS_Pico
-- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/WheelsROS_Seggy  (BLDC motor wheels)
+For matching Arduino IDE **firmware code** see:
+- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/DraggerROS (Arduino Mega 2560)
+- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/PluckyWheelsROS (Arduino Mega 2560)
+- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/WheelsROS_Pico (Raspberry Pi Pico)
+- https://github.com/slgrobotics/Misc/tree/master/Arduino/Sketchbook/WheelsROS_Seggy  (BLDC motor wheels & Teensy 4.x)
 
 Please refer to [my Project Wiki](https://github.com/slgrobotics/articubot_one/wiki) for detailed instructions.
+
+### Data flow
+
+During each control cycle:
+1. **Read:** `diffdrive_arduino` requests encoder counts and periodically reads battery and sonar data. It updates the ROS hardware state interfaces.
+2. **Update:** ROS 2 `diff_drive_controller` uses wheel feedback to calculate odometry and converts the requested robot motion into wheel commands.
+3. **Write:** `diffdrive_arduino` converts those wheel commands into the motor-command values expected by the Arduino firmware and sends them over serial.
+
+The Arduino-style MC handles the motors and physical sensors. *diffdrive_arduino* connects that firmware to ROS 2 through `ros2_control`.
+
+<img alt="data flow" src="https://github.com/user-attachments/assets/3b0e627a-09cb-4c73-b42d-95836b03633c" />
 
 #### Encoder initialization (code fixes by ChatGPT Codex):
 
@@ -47,3 +70,7 @@ colcon build --packages-select diffdrive_arduino --cmake-args -DBUILD_TESTING=ON
 colcon test --packages-select diffdrive_arduino
 colcon test-result --verbose
 ```
+
+-------------------------------------
+
+See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
