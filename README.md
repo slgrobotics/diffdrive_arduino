@@ -53,6 +53,20 @@ The firmware protocol has no transaction IDs, so a reply arriving after its
 timeout can still be confused with a later request for the same command. Set
 `timeout` above the firmware's worst-case response latency.
 
+For the matching firmware with `DO_RESPOND_OK` enabled, set the hardware
+`baud_rate` parameter to **115200**. The empty startup command must return
+`* OK\r`; motor and PID commands must return `m OK\r` and `u OK\r`.
+Missing or invalid acknowledgments fail activation, deactivation, or motor writes.
+Health replies contain voltage in millivolts, current in milliamperes, and free
+memory in bytes; sonar replies contain front-right, front-left, back-right, and
+back-left distances in centimeters. Invalid telemetry preserves the last valid
+state. Seggy currently reports four zero sonar distances. Dragger returns measured
+sonar distances (`255` means out of range), measured battery voltage/current, and
+free RAM. The driver converts centimeters to meters and millivolts/milliamperes
+to volts/amperes. Both pasted firmware versions acknowledge `u` without applying
+PID gains: Seggy does nothing, while Dragger parses the values but leaves the gain
+assignments commented out. Both use motor setpoints in percent (`-100..100`).
+
 Pseudo-terminal regression tests cover framing, fragmented responses, bounded
 reads and writes, concurrent transactions, protocol validation, and disconnects:
 

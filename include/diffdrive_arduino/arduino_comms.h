@@ -19,8 +19,8 @@ public:
   void sendEmptyMsg();
   
   bool readEncoderValues(int &val_1, int &val_2);
-  void readHealthValues(int &mv_per_cell, int &current_ma, int &free_mem_bytes);
-  void readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
+  bool readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes);
+  bool readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
 
   void setMotorValues(int val_1, int val_2);
   void setPidValues(float k_p, float k_d, float k_i, float k_o);

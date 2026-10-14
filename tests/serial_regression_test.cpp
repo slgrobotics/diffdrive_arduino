@@ -169,6 +169,69 @@ int main()
     }
     emulator.get();
 
+
+    // Firmware-specific handshake and acknowledgment rules.
+    emulator = std::async(std::launch::async, [&] {
+      require(terminal.command() == "\r", "Startup command changed");
+      terminal.send("* OK\r");
+      require(terminal.command() == "u 30:20:0:100\r", "PID command changed");
+      terminal.send("u OK\r");
+      terminal.command(); terminal.send("m ERROR\r");
+      terminal.command(); terminal.send("? Error: 'm'\r");
+      terminal.command(); // Missing motor acknowledgment.
+    });
+    arduino.sendEmptyMsg();
+    arduino.setPidValues(30, 20, 0, 100);
+    for (int i = 0; i < 3; ++i)
+      expectThrow<std::runtime_error>([&] { arduino.setMotorValues(0, 0); });
+    emulator.get();
+    emulator = std::async(std::launch::async, [&] {
+      terminal.command(); terminal.send("u ERROR\r");
+      terminal.command(); terminal.send("* ERROR\r");
+    });
+    expectThrow<std::runtime_error>([&] { arduino.setPidValues(30, 20, 0, 100); });
+    expectThrow<std::runtime_error>([&] { arduino.sendEmptyMsg(); });
+    emulator.get();
+
+    // Firmware numeric telemetry must parse atomically, including signed current.
+    const std::string invalid_health[] = {
+      "h bogus -1 0\r", "h 12000x -1 0\r", "h 2147483648 -1 0\r",
+      "h 12000 -1\r", "h 12000 -1 0 extra\r", "h 12000-1 0\r"};
+    const std::string invalid_sonar[] = {
+      "p 0 0 bad 0\r", "p 0 0 0\r", "p 0 0 0 2147483648\r", "p 0 0 0 0 extra\r"};
+    emulator = std::async(std::launch::async, [&] {
+      require(terminal.command() == "h\r", "Health command changed");
+      terminal.send("h 12600 -1 0\r");
+      require(terminal.command() == "h\r", "Dragger health command changed");
+      terminal.send("h 13713 4530 2048\r");
+      for (const auto &response : invalid_health) { terminal.command(); terminal.send(response); }
+      require(terminal.command() == "p\r", "Sonar command changed");
+      terminal.send("p 0 0 0 0\r");
+      terminal.command(); terminal.send("p 10 20 30 255\r");
+      for (const auto &response : invalid_sonar) { terminal.command(); terminal.send(response); }
+    });
+    int voltage = 0, current = 0, memory = 7;
+    require(arduino.readHealthValues(voltage, current, memory), "Valid health reply rejected");
+    require(voltage == 12600 && current == -1 && memory == 0, "Health units/values changed");
+    require(arduino.readHealthValues(voltage, current, memory), "Dragger health reply rejected");
+    require(voltage == 13713 && current == 4530 && memory == 2048, "Dragger health values changed");
+    for (const auto &response : invalid_health) {
+      (void)response;
+      require(!arduino.readHealthValues(voltage, current, memory), "Malformed health accepted");
+      require(voltage == 13713 && current == 4530 && memory == 2048, "Malformed health changed state");
+    }
+    int fr = -1, fl = -1, br = -1, bl = -1;
+    require(arduino.readPingValues(fr, fl, br, bl), "Firmware zero sonar reply rejected");
+    require(fr == 0 && fl == 0 && br == 0 && bl == 0, "Zero sonar values changed");
+    require(arduino.readPingValues(fr, fl, br, bl), "Valid sonar reply rejected");
+    require(fr == 10 && fl == 20 && br == 30 && bl == 255, "Sonar order changed");
+    for (const auto &response : invalid_sonar) {
+      (void)response;
+      require(!arduino.readPingValues(fr, fl, br, bl), "Malformed sonar accepted");
+      require(fr == 10 && fl == 20 && br == 30 && bl == 255, "Malformed sonar changed state");
+    }
+    emulator.get();
+
     ::close(terminal.master);
     terminal.master = -1;
     expectThrow<std::system_error>([&] { serial.exchange("e\r"); });
