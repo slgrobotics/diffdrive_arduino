@@ -91,6 +91,30 @@ void ArduinoComms::setPidValues(float k_p, float k_d, float k_i, float k_o)
     sendMsg(ss.str());
 }
 
+/*
+These are the command letters used in the Arduino sketch.
+They are defined here for reference, but not used in this file.
+See https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/WheelsROS_Seggy/Comm.ino
+
+#define ANALOG_READ    'a'
+#define GET_BAUDRATE   'b'
+#define PIN_MODE       'c'
+#define DIGITAL_READ   'd'
+#define READ_ENCODERS  'e'
+#define READ_HEALTH    'h'
+#define MOTOR_SPEEDS   'm'
+#define MOTOR_RAW_PWM  'o'
+#define SONAR_PING     'p'
+#define RESET_ENCODERS 'r'
+#define SERVO_WRITE    's'
+#define SERVO_READ     't'
+#define UPDATE_PID     'u'
+#define DIGITAL_WRITE  'w'
+#define ANALOG_WRITE   'x'
+
+#define EXPECT_RESPONSE_OK
+*/
+
 std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_output)
 {
     try
