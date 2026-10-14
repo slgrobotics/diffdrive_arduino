@@ -32,6 +32,36 @@ For matching Arduino IDE **firmware code** see:
 
 Please refer to [my Project Wiki](https://github.com/slgrobotics/articubot_one/wiki) for detailed instructions.
 
+### Linux serial transport
+
+The driver uses a local POSIX serial wrapper (`termios` and `poll`); no `serial`,
+LibSerial, or additional serial package is required. Ports use raw 8N1 without
+hardware or software flow control. The existing `device`, `baud_rate`, and
+`timeout` hardware parameters still apply; `timeout` must be positive and is the
+maximum time in milliseconds to receive a complete reply. Common Linux baud rates
+from 1200 through 4000000 are supported; unsupported rates fail configuration.
+
+Commands and replies end in `\r`. Each command/reply transaction is synchronized,
+writes have a 100 ms deadline, and replies are limited to 1024 bytes. Input left
+from a previous transaction is discarded before sending a new command. Input is
+never flushed after sending. Incomplete, oversized, or mismatched replies fail
+the transaction; I/O errors and write timeouts close the connection. Commands are
+not automatically retried. Opening the port may reset the microcontroller;
+activation waits one second before its startup handshake.
+
+The firmware protocol has no transaction IDs, so a reply arriving after its
+timeout can still be confused with a later request for the same command. Set
+`timeout` above the firmware's worst-case response latency.
+
+Pseudo-terminal regression tests cover framing, fragmented responses, bounded
+reads and writes, concurrent transactions, protocol validation, and disconnects:
+
+```bash
+colcon build --packages-select diffdrive_arduino --cmake-args -DBUILD_TESTING=ON
+colcon test --packages-select diffdrive_arduino
+colcon test-result --verbose
+```
+
 ### Data flow
 
 During each control cycle:

@@ -21,7 +21,6 @@
   <depend>controller_manager</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
-  <depend>serial</depend>
   <depend>sensor_msgs</depend>
   <test_depend>diff_drive_controller</test_depend>
 
