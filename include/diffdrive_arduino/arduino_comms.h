@@ -5,6 +5,11 @@
 class ArduinoComms
 {
 
+/*
+Matching Arduino code can be found in the following sketches:
+    https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/WheelsROS_Seggy/Comm.ino
+    https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/DraggerROS/DraggerComm.ino
+*/
 
 public:
 
