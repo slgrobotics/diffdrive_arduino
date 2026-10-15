@@ -1,5 +1,9 @@
 #include "diffdrive_arduino/diffdrive_arduino.h"
 
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 
@@ -35,11 +39,28 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev);
   r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev);
 
+  // Optional finite representation of a sonar no-return reading, in meters.
+  double sonar_no_return_range = std::numeric_limits<double>::infinity();
+  const auto no_return_param = info_.hardware_parameters.find("sonar_no_return_range");
+  if (no_return_param != info_.hardware_parameters.end()) {
+    try {
+      size_t parsed = 0;
+      sonar_no_return_range = std::stod(no_return_param->second, &parsed);
+      if (parsed != no_return_param->second.size() ||
+          !std::isfinite(sonar_no_return_range) || sonar_no_return_range <= 2.5) {
+        throw std::invalid_argument("expected a finite distance greater than 2.5 m");
+      }
+    } catch (const std::exception & error) {
+      RCLCPP_ERROR(logger_, "Invalid sonar_no_return_range: %s", error.what());
+      return CallbackReturn::ERROR;
+    }
+  }
+
   // Set up the ultrasonic sensors:
-  range_f_l_.setup("sonar_F_L");
-  range_f_r_.setup("sonar_F_R");
-  range_b_l_.setup("sonar_B_L");
-  range_b_r_.setup("sonar_B_R");
+  range_f_l_.setup("sonar_F_L", sonar_no_return_range);
+  range_f_r_.setup("sonar_F_R", sonar_no_return_range);
+  range_b_l_.setup("sonar_B_L", sonar_no_return_range);
+  range_b_r_.setup("sonar_B_R", sonar_no_return_range);
 
   // Set up the Batery, some parameters are needed for "percentage" and other calculations:
   battery_.setup(info_.hardware_parameters["battery_name"], std::stoi(info_.hardware_parameters["battery_num_cells"]));
@@ -145,6 +166,11 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_deactivate(const rclcpp_
     {
       arduino_.setMotorValues(0, 0);
     }
+    else
+    {
+      RCLCPP_ERROR(logger_, "Cannot confirm motor stop: Arduino disconnected");
+      return CallbackReturn::ERROR;
+    }
   }
   catch (const std::exception &error)
   {
@@ -204,26 +230,36 @@ hardware_interface::return_type DiffDriveArduino::read(
   {
     bat_cnt_ = 0;
 
-    arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes);
-
-    battery_.setVoltage(((double)voltage_mv) / 1000.0);   // Volts
-    battery_.setTemperature(21.0f);                       // Celcius
-    battery_.setCurrent(-((double)current_ma) / 1000.0);  // Amperes
-    battery_.setPercentage();                             // in 0...1.0 range. Calculate it first from Voltage
-    battery_.setCapacity(battery_.design_capacity * 0.9); // can't directly inquire it. Can be lower than design_capacity
-    battery_.setCharge(battery_.capacity * battery_.percentage);
-    battery_.setPresent(battery_.voltage > 1.0);
-    battery_.setPowerSupplyStatus(battery_.voltage > 14.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
-    battery_.setPowerSupplyHealth(battery_.voltage > 11.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD : sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN);
-    battery_interfaces_.update(battery_);
+    if (arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes))
+    {
+      battery_.setVoltage(((double)voltage_mv) / 1000.0);   // Volts
+      battery_.setTemperature(21.0f);                       // Celcius
+      battery_.setCurrent(-((double)current_ma) / 1000.0);  // Amperes
+      battery_.setPercentage();                             // in 0...1.0 range. Calculate it first from Voltage
+      battery_.setCapacity(battery_.design_capacity * 0.9); // can't directly inquire it. Can be lower than design_capacity
+      battery_.setCharge(battery_.capacity * battery_.percentage);
+      battery_.setPresent(battery_.voltage > 1.0);
+      battery_.setPowerSupplyStatus(battery_.voltage > 14.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
+      battery_.setPowerSupplyHealth(battery_.voltage > 11.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD : sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN);
+      battery_interfaces_.update(battery_);
+    }
+    else
+    {
+      RCLCPP_WARN(logger_, "Invalid health response; battery state unchanged");
+    }
   }
 
-  arduino_.readPingValues(front_right, front_left, back_right, back_left);
-
-  range_f_l_.setRange(front_left); // meters
-  range_f_r_.setRange(front_right);
-  range_b_l_.setRange(back_left);
-  range_b_r_.setRange(back_right);
+  if (arduino_.readPingValues(front_right, front_left, back_right, back_left))
+  {
+    range_f_l_.setRange(front_left); // meters
+    range_f_r_.setRange(front_right);
+    range_b_l_.setRange(back_left);
+    range_b_r_.setRange(back_right);
+  }
+  else
+  {
+    RCLCPP_WARN(logger_, "Invalid sonar response; range state unchanged");
+  }
 
   if((++print_cnt_) > 100)
   {
@@ -262,7 +298,15 @@ hardware_interface::return_type DiffDriveArduino::write(
 
   //RCLCPP_INFO(logger_, "cmds: %f %f  sending: %d %d", l_wheel_.cmd, r_wheel_.cmd, l_cmd, r_cmd);
 
-  arduino_.setMotorValues(l_cmd, r_cmd);
+  try
+  {
+    arduino_.setMotorValues(l_cmd, r_cmd);
+  }
+  catch (const std::exception &error)
+  {
+    RCLCPP_ERROR(logger_, "Motor write failed: %s", error.what());
+    return return_type::ERROR;
+  }
 
   return return_type::OK;
 }
