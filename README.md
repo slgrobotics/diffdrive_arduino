@@ -100,6 +100,8 @@ calibration and battery values (define these properties elsewhere in your Xacro)
 </ros2_control>
 ```
 
+See actual configuration file example [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/description/ros2_control.xacro).
+
 The initializers in `include/diffdrive_arduino/config.h` are **not fallbacks**:
 `on_init()` overwrites every `cfg_` field unconditionally. A missing map entry
 produces an empty string; string fields become empty and numeric conversions
