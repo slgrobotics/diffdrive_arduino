@@ -198,3 +198,25 @@ colcon test-result --verbose
 -------------------------------------
 
 See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
+
+### Optional finite sonar no-return distance
+
+By default, sonar values above 250 cm are exported as positive infinity.
+To export a finite sentinel instead, add this optional ros2_control hardware
+parameter inside the URDF/Xacro `<hardware>` element:
+
+```xml
+<param name="sonar_no_return_range">1000.0</param>
+```
+
+The value must be finite and greater than 2.5 meters. It applies to all four
+sonars; readings at or below 250 cm keep their existing centimeter-to-meter
+conversion. Omit the parameter to restore infinity. This is an initialization
+parameter and requires restarting the hardware component.
+
+For Nav2 collision monitor, also set `max_range: 1000.0` in each of the four
+`range_sensor_broadcaster` controller parameter blocks. Otherwise the sentinel
+is outside the declared span and the source can still trigger a stop.
+The sentinel represents no return, not a real measurement or an increase in
+the physical sensor range. Consumers will see synthetic obstacle points at
+that distance; keep it outside collision monitor zones and approach checks.

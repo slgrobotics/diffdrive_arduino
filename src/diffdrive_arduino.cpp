@@ -1,5 +1,9 @@
 #include "diffdrive_arduino/diffdrive_arduino.h"
 
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 
@@ -35,11 +39,28 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev);
   r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev);
 
+  // Optional finite representation of a sonar no-return reading, in meters.
+  double sonar_no_return_range = std::numeric_limits<double>::infinity();
+  const auto no_return_param = info_.hardware_parameters.find("sonar_no_return_range");
+  if (no_return_param != info_.hardware_parameters.end()) {
+    try {
+      size_t parsed = 0;
+      sonar_no_return_range = std::stod(no_return_param->second, &parsed);
+      if (parsed != no_return_param->second.size() ||
+          !std::isfinite(sonar_no_return_range) || sonar_no_return_range <= 2.5) {
+        throw std::invalid_argument("expected a finite distance greater than 2.5 m");
+      }
+    } catch (const std::exception & error) {
+      RCLCPP_ERROR(logger_, "Invalid sonar_no_return_range: %s", error.what());
+      return CallbackReturn::ERROR;
+    }
+  }
+
   // Set up the ultrasonic sensors:
-  range_f_l_.setup("sonar_F_L");
-  range_f_r_.setup("sonar_F_R");
-  range_b_l_.setup("sonar_B_L");
-  range_b_r_.setup("sonar_B_R");
+  range_f_l_.setup("sonar_F_L", sonar_no_return_range);
+  range_f_r_.setup("sonar_F_R", sonar_no_return_range);
+  range_b_l_.setup("sonar_B_L", sonar_no_return_range);
+  range_b_r_.setup("sonar_B_R", sonar_no_return_range);
 
   // Set up the Batery, some parameters are needed for "percentage" and other calculations:
   battery_.setup(info_.hardware_parameters["battery_name"], std::stoi(info_.hardware_parameters["battery_num_cells"]));
