@@ -32,6 +32,81 @@ For matching Arduino IDE **firmware code** see:
 
 Please refer to [my Project Wiki](https://github.com/slgrobotics/articubot_one/wiki) for detailed instructions.
 
+### Hardware parameters and `cfg_`
+
+Hardware settings are specified in the robot's URDF/Xacro under
+`<ros2_control><hardware><param>`. They are separate from ordinary ROS node
+parameters and the controller parameters in YAML.
+
+```text
+URDF/Xacro <hardware><param> values
+  -> ros2_control HardwareInfo
+  -> info_.hardware_parameters (string values)
+  -> DiffDriveArduino::on_init()
+  -> cfg_ and battery configuration
+```
+
+The base-class `SystemInterface::on_init(params)` populates `info_`. The driver's
+`on_init()` then copies strings and converts numeric values using `std::stoi()`
+(integers) or `std::stof()` (floating point). For example:
+
+```cpp
+cfg_.device = info_.hardware_parameters["device"];
+cfg_.baud_rate = std::stoi(info_.hardware_parameters["baud_rate"]);
+cfg_.timeout = std::stoi(info_.hardware_parameters["timeout"]);
+arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);
+```
+
+All **12 hardware parameters below are required by the current initialization
+code**, including `loop_rate`, which is parsed but currently unused. Battery
+parameters configure `battery_` directly rather than becoming members of `cfg_`.
+
+| Parameter | Type | Meaning |
+| --- | --- | --- |
+| `left_wheel_name` | String | Left wheel joint name; must match the robot's joint definition. |
+| `right_wheel_name` | String | Right wheel joint name; must match the robot's joint definition. |
+| `loop_rate` | Float | Nominal loop rate in Hz; currently stored but unused. Set the actual control rate through controller manager's `update_rate`. |
+| `device` | String | Linux serial device path, such as `/dev/ttyACM0` or a stable `/dev/serial/by-id/...` path. |
+| `baud_rate` | Integer | Serial baud rate; `115200` for the Seggy and Dragger firmware described here. |
+| `timeout` | Integer | Positive serial response timeout in milliseconds. |
+| `enc_counts_per_rev` | Integer | Encoder counts per complete wheel revolution, accounting for gearing and the firmware's counting mode; must be positive. |
+| `wheels_pwm_factor` | Float | Converts wheel velocity commands in rad/s to firmware motor setpoints in percent: `round(velocity * factor)`, clamped to `-100..100`. Calibrate for each robot. |
+| `battery_name` | String | Name used for the exported battery sensor interfaces. |
+| `battery_num_cells` | Integer | Number of cells in series; used by the battery voltage/charge estimate. |
+| `battery_technology` | Integer | A `sensor_msgs/msg/BatteryState` `POWER_SUPPLY_TECHNOLOGY_*` value, e.g. `4` for LiFePO4. |
+| `battery_design_capacity` | Float | Battery design capacity in ampere-hours (Ah). |
+
+For example, the hardware block can use robot-specific Xacro properties for the
+calibration and battery values (define these properties elsewhere in your Xacro):
+
+```xml
+<ros2_control name="ArduinoSystem" type="system">
+  <hardware>
+    <plugin>diffdrive_arduino/DiffDriveArduino</plugin>
+    <param name="left_wheel_name">${left_wheel_joint_name}</param>
+    <param name="right_wheel_name">${right_wheel_joint_name}</param>
+    <param name="loop_rate">${control_loop_rate}</param>
+    <param name="device">/dev/ttyACM0</param>
+    <param name="baud_rate">115200</param>
+    <param name="timeout">1000</param>
+    <param name="enc_counts_per_rev">${encoder_counts_per_wheel_rev}</param>
+    <param name="wheels_pwm_factor">${wheel_velocity_to_percent}</param>
+    <param name="battery_name">battery</param>
+    <param name="battery_num_cells">${battery_cells_in_series}</param>
+    <param name="battery_technology">${battery_chemistry_id}</param>
+    <param name="battery_design_capacity">${battery_capacity_ah}</param>
+  </hardware>
+  <!-- Add the wheel joint command/state interface definitions here. -->
+</ros2_control>
+```
+
+The initializers in `include/diffdrive_arduino/config.h` are **not fallbacks**:
+`on_init()` overwrites every `cfg_` field unconditionally. A missing map entry
+produces an empty string; string fields become empty and numeric conversions
+throw. Supply all parameters explicitly. Values are read once during
+initialization; changing a ROS node parameter later does not update `cfg_` or
+reconfigure the serial port.
+
 ### Linux serial transport
 
 The driver uses a local POSIX serial wrapper (`termios` and `poll`); no `serial`,
