@@ -100,7 +100,8 @@ calibration and battery values (define these properties elsewhere in your Xacro)
 </ros2_control>
 ```
 
-See actual configuration file example [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/description/ros2_control.xacro).
+See actual configuration file example [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/description/ros2_control.xacro)
+and [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/config/controllers.yaml).
 
 The initializers in `include/diffdrive_arduino/config.h` are **not fallbacks**:
 `on_init()` overwrites every `cfg_` field unconditionally. A missing map entry
@@ -110,6 +111,8 @@ initialization; changing a ROS node parameter later does not update `cfg_` or
 reconfigure the serial port.
 
 ### Linux serial transport
+
+> **Do not** clone `https://github.com/joshnewans/serial.git` package anymore on the robots.
 
 The driver uses a local POSIX serial wrapper (`termios` and `poll`); no `serial`,
 LibSerial, or additional serial package is required. Ports use raw 8N1 without
