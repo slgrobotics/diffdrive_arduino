@@ -43,7 +43,7 @@ class Tracer(Node):
             self.get_logger().info(f'{topic}:\n{message_to_yaml(msg)}')
 
     def print_summary(self):
-        lines = []
+        lines = ["\n============================================================="]
         now = time.monotonic()
         for topic in ('joint_states', 'diff_controller/odom', 'cmd_vel'):
             if topic not in self.latest:
