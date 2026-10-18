@@ -16,7 +16,11 @@ Raise the wheels for initial testing.
 Launch it:
     ros2 launch diffdrive_arduino tracer.launch.py
 
-Send commands:
+  or:
+
+    ros2 launch diffdrive_arduino tracer.launch.py output_mode:=verbose
+
+Send wheel commands:
     ros2 topic pub --rate 10 /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.05}, angular: {z: 0.0}}'
 
 """
