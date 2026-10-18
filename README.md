@@ -220,3 +220,57 @@ is outside the declared span and the source can still trigger a stop.
 The sentinel represents no return, not a real measurement or an increase in
 the physical sensor range. Consumers will see synthetic obstacle points at
 that distance; keep it outside collision monitor zones and approach checks.
+
+### Minimal on-robot tracer (Lyrical)
+
+This bench launch runs the real `DiffDriveArduino` plugin, controller manager,
+`diff_drive_controller`, joint-state broadcaster, and a small Python tracer.
+No navigation stack or external robot description is needed. Stop other nodes
+using the serial device before starting it, and raise the wheels for the first test.
+
+Copy `config/tracer_hardware.yaml` and `config/tracer_controllers.yaml` somewhere
+editable. Set the serial device, encoder counts, PWM conversion, battery settings,
+and measured wheel radius/separation for your robot. The supplied values are
+examples, not calibrated robot settings. The controller stops commanding motion
+when commands are older than 0.5 seconds; firmware must handle host/serial loss.
+
+```bash
+colcon build --packages-select diffdrive_arduino
+source install/setup.bash
+ros2 launch diffdrive_arduino tracer.launch.py \
+  hardware_config:=/absolute/path/to/tracer_hardware.yaml \
+  controllers:=/absolute/path/to/tracer_controllers.yaml
+```
+
+The tracer prints every received joint-state and odometry message and every
+`/cmd_vel` command. It stamps incoming `geometry_msgs/msg/Twist` commands and
+forwards them to `/diff_controller/cmd_vel` (`TwistStamped`, as used in Lyrical).
+The controller-manager console also prints each completed serial TX/RX transaction
+at DEBUG level: `e` contains raw encoder counts; `h` contains millivolts,
+milliamperes and free-memory bytes; `p` contains front-right, front-left,
+back-right and back-left centimeters. Startup, PID and motor acknowledgments
+are included. This traces polled replies, not unsolicited serial traffic;
+incomplete exchanges are reported as transport errors. Battery and sonar are
+visible in these raw logs without additional sensor broadcasters. Logging every
+sample can affect timing, so this launch is intended for diagnosis.
+
+From another sourced terminal, send a small forward command continuously:
+
+```bash
+ros2 topic pub --rate 10 /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 0.05}, angular: {z: 0.0}}'
+```
+
+Stop the publisher with Ctrl-C (the controller timeout then stops the commands),
+or explicitly send zero:
+
+```bash
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist '{}'
+```
+
+Use `linear.x: 0.0` and a small `angular.z` to test turning. Linear velocity is
+in m/s and angular velocity in rad/s. Ctrl-C in the launch terminal shuts down
+the test. To attach only the tracer to an existing compatible controller setup,
+run `ros2 run diffdrive_arduino tracer.py`; it uses the topic names above and
+supports ordinary ROS remapping arguments. Avoid another cmd_vel bridge publishing
+to the same controller at the same time.

@@ -56,8 +56,12 @@ install(
   DIRECTORY
     controllers
     launch
+    config
+    description
   DESTINATION share/${PROJECT_NAME}
 )
+
+install(PROGRAMS scripts/tracer.py DESTINATION lib/${PROJECT_NAME})
 
 ament_export_libraries(diffdrive_arduino)
 

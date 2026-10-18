@@ -124,6 +124,19 @@ std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_out
     {
         // Every command expects a CR-terminated reply prefixed with its command letter.
         const std::string response = serial_conn_.exchange(msg_to_send);
+        // Debug tracing includes every reply, even replies rejected below.
+        // Escape CR/LF so each transaction remains a readable log line.
+        auto escaped = [](const std::string & value) {
+            std::string result;
+            for (char c : value) {
+                if (c == '\r') result += "\\r";
+                else if (c == '\n') result += "\\n";
+                else result += c;
+            }
+            return result;
+        };
+        RCLCPP_DEBUG(rclcpp::get_logger("DiffDriveArduino"), "TX '%s' RX '%s'",
+                     escaped(msg_to_send).c_str(), escaped(response).c_str());
         if (response.size() < 3 || response[1] != ' ' || response.back() != '\r')
         {
             RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Incomplete or malformed Arduino response");
