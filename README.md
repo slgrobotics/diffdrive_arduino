@@ -6,6 +6,17 @@ See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
 - https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
 - https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-real#getting-the-hardware-interface
 
+## Contents
+
+- [Overview](#diffdrive_arduino---a-unified-ros2-base-driver)
+- [Hardware parameters and `cfg_`](#hardware-parameters-and-cfg_)
+- [Linux serial transport](#linux-serial-transport)
+- [Data flow](#data-flow)
+- [Encoder initialization](#encoder-initialization-code-fixes-by-chatgpt-codex)
+- [Tests](#tests)
+- [Optional finite sonar no-return distance](#optional-finite-sonar-no-return-distance)
+- [Minimal on-robot tracer (Lyrical)](#minimal-on-robot-tracer-lyrical)
+
 ## `diffdrive_arduino` - a unified ROS2 *base* driver 
 
 - Implements *diffdrive_arduino* package ([ros2_control](https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-concepts) interfaces)
