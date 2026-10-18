@@ -67,5 +67,9 @@ private:
 
   int bat_cnt_ = 0;
   int print_cnt_ = 0;
+  bool compact_trace_ = false;
+  std::chrono::steady_clock::time_point trace_time_{};
+  std::chrono::steady_clock::time_point health_time_{};
+  std::chrono::steady_clock::time_point sonar_time_{};
 };
 

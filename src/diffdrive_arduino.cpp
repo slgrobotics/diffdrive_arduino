@@ -24,7 +24,10 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
 
   RCLCPP_INFO(logger_, "Configuring...");
 
-  time_ = std::chrono::steady_clock::now();
+  compact_trace_ = info_.hardware_parameters.count("compact_trace") &&
+    info_.hardware_parameters.at("compact_trace") == "true";
+  trace_time_ = std::chrono::steady_clock::now();
+  time_ = trace_time_;
 
   cfg_.left_wheel_name = info_.hardware_parameters["left_wheel_name"];
   cfg_.right_wheel_name = info_.hardware_parameters["right_wheel_name"];
@@ -232,6 +235,7 @@ hardware_interface::return_type DiffDriveArduino::read(
 
     if (arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes))
     {
+      health_time_ = std::chrono::steady_clock::now();
       battery_.setVoltage(((double)voltage_mv) / 1000.0);   // Volts
       battery_.setTemperature(21.0f);                       // Celcius
       battery_.setCurrent(-((double)current_ma) / 1000.0);  // Amperes
@@ -251,6 +255,7 @@ hardware_interface::return_type DiffDriveArduino::read(
 
   if (arduino_.readPingValues(front_right, front_left, back_right, back_left))
   {
+    sonar_time_ = std::chrono::steady_clock::now();
     range_f_l_.setRange(front_left); // meters
     range_f_r_.setRange(front_right);
     range_b_l_.setRange(back_left);
@@ -261,7 +266,21 @@ hardware_interface::return_type DiffDriveArduino::read(
     RCLCPP_WARN(logger_, "Invalid sonar response; range state unchanged");
   }
 
-  if((++print_cnt_) > 100)
+  const auto trace_now = std::chrono::steady_clock::now();
+  if (compact_trace_ && trace_now - trace_time_ >= std::chrono::seconds(1))
+  {
+    trace_time_ = trace_now;
+    auto age = [&](const std::chrono::steady_clock::time_point & sample) {
+      return sample == std::chrono::steady_clock::time_point{} ? -1.0 :
+        std::chrono::duration<double>(trace_now - sample).count();
+    };
+    RCLCPP_INFO(logger_,
+      "encoders L=%d R=%d counts | health=%d mV %d mA free=%d bytes age=%.1fs\n"
+      "sonar FR=%d FL=%d BR=%d BL=%d cm age=%.1fs (-1 age=waiting)",
+      left, right, voltage_mv, current_ma, free_mem_bytes, age(health_time_),
+      front_right, front_left, back_right, back_left, age(sonar_time_));
+  }
+  if(!compact_trace_ && (++print_cnt_) > 100)
   {
     print_cnt_ = 0;
 

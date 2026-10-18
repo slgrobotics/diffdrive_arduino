@@ -274,3 +274,16 @@ the test. To attach only the tracer to an existing compatible controller setup,
 run `ros2 run diffdrive_arduino tracer.py`; it uses the topic names above and
 supports ordinary ROS remapping arguments. Avoid another cmd_vel bridge publishing
 to the same controller at the same time.
+
+For compact output, add `output_mode:=compact` to the tracer launch command.
+This prints the latest raw encoder counts, health (mV, mA, free memory), sonar
+(cm), wheel positions/velocities, planar odometry and last received cmd_vel in
+about five lines per second. The hardware and Python summaries have independent
+one-second timers. Message ages identify old samples; health/sonar age `-1`
+means no valid reading yet. A displayed cmd_vel is the last received request,
+not proof of an active command after the controller timeout. Serial DEBUG output
+is disabled in this mode; warnings and errors remain visible. Intermediate
+samples are summarized rather than printed. The default `output_mode:=verbose`
+retains the full per-message output. When running the tracer alone, use
+`ros2 run diffdrive_arduino tracer.py --ros-args -p output_mode:=compact`;
+hardware summaries require the launch's optional `compact_trace` hardware setting.

@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="arduino_bench_test">
+  <xacro:arg name="output_mode" default="verbose"/>
   <xacro:arg name="hardware_config" default=""/>
   <xacro:property name="hw" value="${xacro.load_yaml('$(arg hardware_config)')}"/>
   <link name="base_link"/>
@@ -17,6 +18,7 @@
   <xacro:wheel side="right" y="-0.15"/>
   <ros2_control name="ArduinoSystem" type="system">
     <hardware>
+      <param name="compact_trace">${str('$(arg output_mode)' == 'compact').lower()}</param>
       <plugin>diffdrive_arduino/DiffDriveArduino</plugin>
       <param name="left_wheel_name">left_wheel_joint</param>
       <param name="right_wheel_name">right_wheel_joint</param>

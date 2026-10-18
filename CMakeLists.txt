@@ -75,6 +75,9 @@ ament_export_dependencies(
 
 if(BUILD_TESTING)
   enable_testing()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME tracer_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/tracer_test.py)
+  set_tests_properties(tracer_test PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
   add_executable(serial_regression_test tests/serial_regression_test.cpp src/posix_serial.cpp src/arduino_comms.cpp)
   target_include_directories(serial_regression_test PRIVATE include)
   target_link_libraries(serial_regression_test PRIVATE Threads::Threads rclcpp::rclcpp)

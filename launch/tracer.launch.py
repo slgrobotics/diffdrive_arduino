@@ -33,9 +33,13 @@ import xacro
 
 def launch_setup(context):
     share = Path(get_package_share_directory('diffdrive_arduino'))
+    output_mode = LaunchConfiguration('output_mode').perform(context)
+    if output_mode not in ('verbose', 'compact'):
+        raise ValueError('output_mode must be verbose or compact')
     description = xacro.process_file(
         str(share / 'description' / 'tracer.urdf.xacro'),
-        mappings={'hardware_config': LaunchConfiguration('hardware_config').perform(context)}
+        mappings={'hardware_config': LaunchConfiguration('hardware_config').perform(context),
+                  'output_mode': output_mode}
     ).toxml()
     return [
         Node(package='robot_state_publisher', executable='robot_state_publisher',
@@ -43,14 +47,16 @@ def launch_setup(context):
 
         Node(package='controller_manager', executable='ros2_control_node',
              parameters=[LaunchConfiguration('controllers')], output='screen',
-             arguments=['--ros-args', '--log-level', 'DiffDriveArduino:=debug']  # comment this line out to supress serial DEBUG logs
+             arguments=['--ros-args', '--log-level',
+                        'DiffDriveArduino:=' + ('debug' if output_mode == 'verbose' else 'info')]
         ),
 
         Node(package='controller_manager', executable='spawner',
              arguments=['joint_state_broadcaster', 'diff_controller',
                         '--controller-manager-timeout', '60'], output='screen'),
 
-        Node(package='diffdrive_arduino', executable='tracer.py', output='screen'),
+        Node(package='diffdrive_arduino', executable='tracer.py', output='screen',
+             parameters=[{'output_mode': output_mode}]),
     ]
 
 
@@ -59,5 +65,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('hardware_config', default_value=str(share / 'config' / 'tracer_hardware.yaml')),
         DeclareLaunchArgument('controllers', default_value=str(share / 'config' / 'tracer_controllers.yaml')),
+        DeclareLaunchArgument('output_mode', default_value='compact',
+                              description='verbose: every message; compact: latest data once per second'),
         OpaqueFunction(function=launch_setup),
     ])
