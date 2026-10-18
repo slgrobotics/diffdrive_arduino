@@ -1,10 +1,10 @@
 See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
 
 
-**Credits:** Original code by Articulated Robotics (Josh Newans):
-
-- https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
-- https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-real#getting-the-hardware-interface
+> **Credits:** Original code by Articulated Robotics (Josh Newans):
+>
+> - https://articulatedrobotics.xyz/category/build-a-mobile-robot-with-ros
+> - https://articulatedrobotics.xyz/tutorials/mobile-robot/applications/ros2_control-real#getting-the-hardware-interface
 
 ## Contents
 
@@ -13,9 +13,11 @@ See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
 - [Linux serial transport](#linux-serial-transport)
 - [Data flow](#data-flow)
 - [Encoder initialization](#encoder-initialization-code-fixes-by-chatgpt-codex)
-- [Tests](#tests)
+- [Regression tests](#regression-tests)
 - [Optional finite sonar no-return distance](#optional-finite-sonar-no-return-distance)
-- [Minimal on-robot tracer (Lyrical)](#minimal-on-robot-tracer-lyrical)
+- [Minimal on-robot tracer](#minimal-on-robot-tracer)
+
+----------------------------------------
 
 ## `diffdrive_arduino` - a unified ROS2 *base* driver 
 
@@ -178,7 +180,7 @@ The Arduino-style MC handles the motors and physical sensors. *diffdrive_arduino
 
 <img alt="data flow" src="https://github.com/user-attachments/assets/3b0e627a-09cb-4c73-b42d-95836b03633c" />
 
-#### Encoder initialization (code fixes by ChatGPT Codex):
+### Encoder initialization (code fixes by ChatGPT Codex):
 
 The Arduino may return accumulated signed 32-bit encoder counts from previous runs. 
 
@@ -195,7 +197,8 @@ Velocity uses elapsed time between valid samples from a monotonic clock. Signed 
 firmware must not silently reset counters during an active session. If firmware
 reboots, deactivate and reactivate the hardware to capture new baselines.
 
-#### Tests
+### Regression tests
+
 Regression tests cover retained startup counts with the real diff-drive odometry
 implementation, forward/reverse movement, reactivation, counter rollover,
 malformed replies, and invalid sample intervals:
@@ -205,10 +208,6 @@ colcon build --packages-select diffdrive_arduino --cmake-args -DBUILD_TESTING=ON
 colcon test --packages-select diffdrive_arduino
 colcon test-result --verbose
 ```
-
--------------------------------------
-
-See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
 
 ### Optional finite sonar no-return distance
 
@@ -232,18 +231,27 @@ The sentinel represents no return, not a real measurement or an increase in
 the physical sensor range. Consumers will see synthetic obstacle points at
 that distance; keep it outside collision monitor zones and approach checks.
 
-### Minimal on-robot tracer (Lyrical)
+### Minimal on-robot tracer
 
-This bench launch runs the real `DiffDriveArduino` plugin, controller manager,
-`diff_drive_controller`, joint-state broadcaster, and a small Python tracer.
-No navigation stack or external robot description is needed. Stop other nodes
-using the serial device before starting it, and raise the wheels for the first test.
+This self-contained bench launch runs:
+- the real `DiffDriveArduino` plugin,
+- controller manager,
+- `diff_drive_controller`,
+- joint-state broadcaster,
+- and a small Python tracer.
 
-Copy `config/tracer_hardware.yaml` and `config/tracer_controllers.yaml` somewhere
-editable. Set the serial device, encoder counts, PWM conversion, battery settings,
+No navigation stack or external robot description is needed.
+
+> Stop other nodes using the serial device before starting it, and **raise the wheels for the first test**.
+
+If not using defaults, copy `config/tracer_hardware.yaml` and `config/tracer_controllers.yaml` somewhere
+editable.
+
+Set the serial device, encoder counts, PWM conversion, battery settings,
 and measured wheel radius/separation for your robot. The supplied values are
-examples, not calibrated robot settings. The controller stops commanding motion
-when commands are older than 0.5 seconds; firmware must handle host/serial loss.
+examples, not calibrated robot settings.
+
+> The controller stops commanding motion when commands are older than 0.5 seconds; firmware must handle host/serial loss.
 
 ```bash
 colcon build --packages-select diffdrive_arduino
@@ -251,21 +259,31 @@ source install/setup.bash
 ros2 launch diffdrive_arduino tracer.launch.py \
   hardware_config:=/absolute/path/to/tracer_hardware.yaml \
   controllers:=/absolute/path/to/tracer_controllers.yaml
+
+  or:
+
+ros2 launch diffdrive_arduino tracer.launch.py output_mode:=verbose
 ```
 
-The tracer prints every received joint-state and odometry message and every
-`/cmd_vel` command. It stamps incoming `geometry_msgs/msg/Twist` commands and
-forwards them to `/diff_controller/cmd_vel` (`TwistStamped`, as used in Lyrical).
-The controller-manager console also prints each completed serial TX/RX transaction
-at DEBUG level: `e` contains raw encoder counts; `h` contains millivolts,
-milliamperes and free-memory bytes; `p` contains front-right, front-left,
-back-right and back-left centimeters. Startup, PID and motor acknowledgments
-are included. This traces polled replies, not unsolicited serial traffic;
-incomplete exchanges are reported as transport errors. Battery and sonar are
-visible in these raw logs without additional sensor broadcasters. Logging every
-sample can affect timing, so this launch is intended for diagnosis.
+In `verbose` mode the tracer prints every received joint-state and odometry message and every
+`/cmd_vel` command. `compact` mode (default) prints once a second. See launch file.
 
-From another sourced terminal, send a small forward command continuously:
+The tracer stamps incoming `geometry_msgs/msg/Twist` commands and
+forwards them to `/diff_controller/cmd_vel` (`TwistStamped`, as used in Lyrical).
+
+The controller-manager console also prints each completed serial TX/RX transaction
+at DEBUG level:
+- `e` contains raw encoder counts;
+- `h` contains millivolts, milliamperes and free-memory bytes;
+- `p` contains front-right, front-left, back-right and back-left centimeters.
+
+Startup, PID and motor acknowledgments are included. This traces polled replies, not unsolicited serial traffic;
+incomplete exchanges are reported as transport errors.
+
+Battery and sonar are visible in these raw logs without additional sensor broadcasters.
+Logging every sample can affect timing, so this launch is intended for diagnosis.
+
+**cmd_vel**: From another sourced terminal, send a small forward command continuously:
 
 ```bash
 ros2 topic pub --rate 10 /cmd_vel geometry_msgs/msg/Twist \
@@ -279,22 +297,14 @@ or explicitly send zero:
 ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist '{}'
 ```
 
-Use `linear.x: 0.0` and a small `angular.z` to test turning. Linear velocity is
-in m/s and angular velocity in rad/s. Ctrl-C in the launch terminal shuts down
-the test. To attach only the tracer to an existing compatible controller setup,
-run `ros2 run diffdrive_arduino tracer.py`; it uses the topic names above and
-supports ordinary ROS remapping arguments. Avoid another cmd_vel bridge publishing
-to the same controller at the same time.
+> Use `linear.x: 0.0` and a small `angular.z` to test turning. Linear velocity is
+> in m/s and angular velocity in rad/s.
+>
+> To attach only the tracer to an existing compatible controller setup,
+> run `ros2 run diffdrive_arduino tracer.py`; it uses the topic names above and
+> supports ordinary ROS remapping arguments. Avoid another `cmd_vel` bridge publishing
+> to the same controller at the same time.
 
-For compact output, add `output_mode:=compact` to the tracer launch command.
-This prints the latest raw encoder counts, health (mV, mA, free memory), sonar
-(cm), wheel positions/velocities, planar odometry and last received cmd_vel in
-about five lines per second. The hardware and Python summaries have independent
-one-second timers. Message ages identify old samples; health/sonar age `-1`
-means no valid reading yet. A displayed cmd_vel is the last received request,
-not proof of an active command after the controller timeout. Serial DEBUG output
-is disabled in this mode; warnings and errors remain visible. Intermediate
-samples are summarized rather than printed. The default `output_mode:=verbose`
-retains the full per-message output. When running the tracer alone, use
-`ros2 run diffdrive_arduino tracer.py --ros-args -p output_mode:=compact`;
-hardware summaries require the launch's optional `compact_trace` hardware setting.
+-------------------------------------
+
+See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
