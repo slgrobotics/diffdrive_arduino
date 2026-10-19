@@ -287,6 +287,8 @@ hardware_interface::return_type DiffDriveArduino::read(
     RCLCPP_INFO(logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free", battery_.voltage, battery_.current, free_mem_bytes);
 
     RCLCPP_INFO(logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters", range_f_l_.getRange(), range_f_r_.getRange(), range_b_l_.getRange(), range_b_r_.getRange());
+
+    RCLCPP_INFO(logger_, "Encoders: L=%d R=%d counts   Vel: %.2f %.2f m/s   Cmd: %.2f %.2f", left, right, l_wheel_.vel, r_wheel_.vel, l_wheel_.cmd, r_wheel_.cmd);
   }
 
   return return_type::OK;
