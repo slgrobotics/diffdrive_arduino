@@ -1,42 +1,48 @@
 #include "diffdrive_arduino/arduino_comms.h"
 #include "diffdrive_arduino/encoder_parser.h"
-// #include <ros/console.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sstream>
-#include <cstdlib>
+#include <array>
+#include <cctype>
+#include <stdexcept>
+#include <thread>
+
+
+namespace
+{
+template<size_t N>
+bool parseIntegers(const std::string &payload, std::array<int, N> &values)
+{
+    std::istringstream stream(payload);
+    for (size_t i = 0; i < N; ++i)
+    {
+        if (i != 0 && !std::isspace(stream.peek())) return false;
+        if (!(stream >> values[i])) return false;
+    }
+    stream >> std::ws;
+    return stream.eof();
+}
+
+void requireAcknowledgment(const std::string &payload, const char *command)
+{
+    if (payload != "OK\r")
+        throw std::runtime_error(std::string("Arduino did not acknowledge ") + command);
+}
+}
 
 
 void ArduinoComms::setup(const std::string &serial_device, int32_t baud_rate, int32_t timeout_ms)
-{  
-    serial_conn_.setPort(serial_device);
-    serial_conn_.setBaudrate(baud_rate);
-    serial::Timeout tt = serial::Timeout::simpleTimeout(timeout_ms);
-    tt.write_timeout_constant = 100;
-    tt.inter_byte_timeout = 10;
-    serial_conn_.setTimeout(tt); // This should be inline except setTimeout takes a reference and so needs a variable
-    serial_conn_.open();
-    serial_conn_.flush();
-    //serial_conn_.readline();    // read/ignore all garbage from Arduino
-    // serial_conn_.(serial_device, baud_rate, serial::Timeout::simpleTimeout(timeout_ms));
-
-
+{
+    serial_conn_.open(serial_device, baud_rate, timeout_ms);
 }
-
 
 void ArduinoComms::sendEmptyMsg()
 {
-    serial_conn_.write("\r");
-    //serial_conn_.flush();
-
-    int tries = 10;
-    std::string response;
-    do {
-        sleep(1);
-        // read any garbled response from Arduino:
-        response = serial_conn_.readline();
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("DiffDriveArduino"),"Arduino garbage: '" << response << "'");
-    } while (response.length() > 0 && --tries > 0);
+    // Opening the port can reset an Arduino. Allow it to finish booting.
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    requireAcknowledgment(sendMsg("\r"), "startup handshake");
 }
+
 
 bool ArduinoComms::readEncoderValues(int &val_1, int &val_2)
 {
@@ -49,40 +55,25 @@ bool ArduinoComms::readEncoderValues(int &val_1, int &val_2)
     return parseEncoderValues(response, val_1, val_2);
 }
 
-void ArduinoComms::readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes)
+bool ArduinoComms::readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes)
 {
-    std::string response = sendMsg("h\r");
-
-    std::istringstream iss(response);
-    std::vector<std::string> results(std::istream_iterator<std::string>{iss},
-                                     std::istream_iterator<std::string>());
-    
-    if(results.size() == 3)
-    {
-        voltage_mv = std::atoi(results.at(0).c_str());      // normally around 12600 (mv)
-        current_ma = std::atoi(results.at(1).c_str());      // not measured - -1
-        free_mem_bytes = std::atoi(results.at(2).c_str());  // normally around 7150
-    }
+    std::array<int, 3> values;
+    if (!parseIntegers(sendMsg("h\r"), values)) return false;
+    voltage_mv = values[0];
+    current_ma = values[1];
+    free_mem_bytes = values[2];
+    return true;
 }
 
-void ArduinoComms::readPingValues(int &front_right, int &front_left, int &back_right, int &back_left)
+bool ArduinoComms::readPingValues(int &front_right, int &front_left, int &back_right, int &back_left)
 {
-    std::string response = sendMsg("p\r");
-
-    //std::cout << "Sonar: '" << response << "'" << std::endl;
-
-    std::istringstream iss(response);
-    std::vector<std::string> results(std::istream_iterator<std::string>{iss},
-                                     std::istream_iterator<std::string>());
-    
-    if(results.size() == 4)
-    {
-        // Ranges in centimeters:
-        front_right = std::atoi(results.at(0).c_str());
-        front_left = std::atoi(results.at(1).c_str());
-        back_right = std::atoi(results.at(2).c_str());
-        back_left = std::atoi(results.at(3).c_str());
-    }
+    std::array<int, 4> values;
+    if (!parseIntegers(sendMsg("p\r"), values)) return false;
+    front_right = values[0];
+    front_left = values[1];
+    back_right = values[2];
+    back_left = values[3];
+    return true;
 }
 
 void ArduinoComms::setMotorValues(int val_1, int val_2)
@@ -90,15 +81,23 @@ void ArduinoComms::setMotorValues(int val_1, int val_2)
     // "m" - set speeds, "o" - set raw PWM
     std::stringstream ss;
     ss << "m " << val_1 << " " << val_2 << "\r";
-    sendMsg(ss.str(), false);
+    requireAcknowledgment(sendMsg(ss.str()), "motor command");
 }
 
 void ArduinoComms::setPidValues(float k_p, float k_d, float k_i, float k_o)
 {
     std::stringstream ss;
     ss << "u " << k_p << ":" << k_d << ":" << k_i << ":" << k_o << "\r";
-    sendMsg(ss.str());
+    requireAcknowledgment(sendMsg(ss.str()), "PID command");
 }
+
+/*
+These are the command letters used in the Arduino sketch.
+They are defined here for reference, but not used in this file.
+
+Matching Arduino code can be found in the following sketches:
+    https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/WheelsROS_Seggy/Comm.ino
+    https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/DraggerROS/DraggerComm.ino
 
 #define ANALOG_READ    'a'
 #define GET_BAUDRATE   'b'
@@ -117,67 +116,53 @@ void ArduinoComms::setPidValues(float k_p, float k_d, float k_i, float k_o)
 #define ANALOG_WRITE   'x'
 
 #define EXPECT_RESPONSE_OK
+*/
 
 std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_output)
 {
-    //std::cout << "...sending: " << msg_to_send << std::endl;
-
-    serial_conn_.write(msg_to_send);
-    serial_conn_.flush();
-
-    char cmd = msg_to_send.at(0);
-
-#ifdef EXPECT_RESPONSE_OK
-
-    // Always expect response, even if it is just "<cmd> OK" or an empty string
-
-    std::string response = serial_conn_.readline(1024, "\r");
-
-#else // EXPECT_RESPONSE_OK
-
-    // Only expect response for some commands:
-
-    std::string response = "";
-
-    switch(cmd)
+    try
     {
-        // These requests do cause response with data:
-        case ANALOG_READ:
-        case GET_BAUDRATE:
-        case DIGITAL_READ:
-        case READ_ENCODERS:
-        case READ_HEALTH:
-        case SONAR_PING:
-        case SERVO_READ:
-            response = serial_conn_.readline(1024, "\r");
-            break;
-        default:
-            return; // no response expected
+        // Every command expects a CR-terminated reply prefixed with its command letter.
+        const std::string response = serial_conn_.exchange(msg_to_send);
+        // Debug tracing includes every reply, even replies rejected below.
+        // Escape CR/LF so each transaction remains a readable log line.
+        auto escaped = [](const std::string & value) {
+            std::string result;
+            for (char c : value) {
+                if (c == '\r') result += "\\r";
+                else if (c == '\n') result += "\\n";
+                else result += c;
+            }
+            return result;
+        };
+        RCLCPP_DEBUG(rclcpp::get_logger("DiffDriveArduino"), "TX '%s' RX '%s'",
+                     escaped(msg_to_send).c_str(), escaped(response).c_str());
+        if (response.size() < 3 || response[1] != ' ' || response.back() != '\r')
+        {
+            RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Incomplete or malformed Arduino response");
+            return {};
+        }
+        if (response.front() == '?')
+        {
+            RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Firmware rejected command: %s", response.c_str());
+            return {};
+        }
+        // An empty command is acknowledged with '*', rather than an echoed CR.
+        const char expected_command = msg_to_send == "\r" ? '*' : msg_to_send.front();
+        if (response.front() != expected_command)
+        {
+            RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Arduino reply does not match command '%c'", msg_to_send.front());
+            return {};
+        }
+        if (print_output)
+        {
+            RCLCPP_DEBUG_STREAM(rclcpp::get_logger("DiffDriveArduino"), "Sent: '" << msg_to_send << "' received: '" << response << "'");
+        }
+        return response.substr(2);
     }
-
-#endif // EXPECT_RESPONSE_OK
-
-    if(response.length() < 3 || response[1] != ' ' || response.back() != '\r')
+    catch (const std::exception &error)
     {
-        std::cout << "Error: Arduino incomplete or malformed response for cmd '" << msg_to_send << "'" << std::endl;
-        return "";
+        RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Arduino serial transaction: %s", error.what());
+        return {};
     }
-
-    char cmd_r = response.at(0);
-
-    if(cmd != cmd_r)
-    {
-        std::cout << "Error: Arduino unmatched response '" << response << "' for cmd '" << msg_to_send << "'" << std::endl;
-        return "";
-    }
-
-    //std::cout << "response: '" << response << "'" << std::endl;
-
-
-    if (print_output)
-    {
-        // RCLCPP_INFO_STREAM(rclcpp::get_logger("DiffDriveArduino"),"Sent: '" << msg_to_send << "' received: '" << response << "'");
-    }
-
-    return response.substr(2); // remove command char and space
 }

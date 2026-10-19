@@ -1,11 +1,15 @@
 #pragma once
 
-#include <serial/serial.h>
-#include <cstring>
+#include "diffdrive_arduino/posix_serial.h"
 
 class ArduinoComms
 {
 
+/*
+Matching Arduino code can be found in the following sketches:
+    https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/WheelsROS_Seggy/Comm.ino
+    https://github.com/slgrobotics/Misc/blob/master/Arduino/Sketchbook/DraggerROS/DraggerComm.ino
+*/
 
 public:
 
@@ -13,16 +17,15 @@ public:
   {  }
 
   ArduinoComms(const std::string &serial_device, int32_t baud_rate, int32_t timeout_ms)
-      : serial_conn_(serial_device, baud_rate, serial::Timeout::simpleTimeout(timeout_ms))
-  {  }
+  { setup(serial_device, baud_rate, timeout_ms); }
 
   void setup(const std::string &serial_device, int32_t baud_rate, int32_t timeout_ms);
 
   void sendEmptyMsg();
   
   bool readEncoderValues(int &val_1, int &val_2);
-  void readHealthValues(int &mv_per_cell, int &current_ma, int &free_mem_bytes);
-  void readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
+  bool readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes);
+  bool readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
 
   void setMotorValues(int val_1, int val_2);
   void setPidValues(float k_p, float k_d, float k_i, float k_o);
@@ -33,5 +36,5 @@ public:
 
 
 private:
-  serial::Serial serial_conn_;  ///< Underlying serial connection 
+  PosixSerial serial_conn_;  ///< Underlying serial connection
 };

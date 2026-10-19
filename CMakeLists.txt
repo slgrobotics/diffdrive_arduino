@@ -12,7 +12,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
-find_package(serial REQUIRED)
+find_package(Threads REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(controller_manager REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -25,18 +25,18 @@ add_library(diffdrive_arduino SHARED
   src/range.cpp
   src/battery.cpp
   src/arduino_comms.cpp
+  src/posix_serial.cpp
 )
 
 target_include_directories(diffdrive_arduino
   PRIVATE
     include
-    ${serial_INCLUDE_DIRS}
 )
 
 target_link_libraries(diffdrive_arduino PRIVATE
+  Threads::Threads
   ${hardware_interface_TARGETS}
   ${controller_manager_TARGETS}
-  ${serial_LIBRARIES}
   rclcpp::rclcpp
   pluginlib::pluginlib
   ${sensor_msgs_TARGETS}
@@ -56,15 +56,18 @@ install(
   DIRECTORY
     controllers
     launch
+    config
+    description
   DESTINATION share/${PROJECT_NAME}
 )
+
+install(PROGRAMS scripts/tracer.py DESTINATION lib/${PROJECT_NAME})
 
 ament_export_libraries(diffdrive_arduino)
 
 ament_export_dependencies(
   hardware_interface
   controller_manager
-  serial
   rclcpp
   pluginlib
   sensor_msgs
@@ -72,6 +75,14 @@ ament_export_dependencies(
 
 if(BUILD_TESTING)
   enable_testing()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME tracer_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/tracer_test.py)
+  set_tests_properties(tracer_test PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
+  add_executable(serial_regression_test tests/serial_regression_test.cpp src/posix_serial.cpp src/arduino_comms.cpp)
+  target_include_directories(serial_regression_test PRIVATE include)
+  target_link_libraries(serial_regression_test PRIVATE Threads::Threads rclcpp::rclcpp)
+  add_test(NAME serial_regression_test COMMAND serial_regression_test)
+  set_tests_properties(serial_regression_test PROPERTIES TIMEOUT 15)
   find_package(diff_drive_controller REQUIRED)
   add_executable(encoder_regression_test tests/encoder_regression_test.cpp src/wheel.cpp)
   target_include_directories(encoder_regression_test PRIVATE include)

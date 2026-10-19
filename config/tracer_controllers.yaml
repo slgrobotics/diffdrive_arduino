@@ -1,0 +1,27 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 20
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    diff_controller:
+      type: diff_drive_controller/DiffDriveController
+
+#
+# EXAMPLE VALUES from Dragger: calibrate these for your robot.
+#
+diff_controller:
+  ros__parameters:
+    left_wheel_names: [left_wheel_joint]
+    right_wheel_names: [right_wheel_joint]
+
+    # Replace with your measured geometry before commanding motion.
+    wheel_separation: 0.580             # distance between left and right wheels
+    wheel_radius: 0.192
+    publish_rate: 20.0
+    cmd_vel_timeout: 0.2
+
+    position_feedback: true
+    open_loop: false
+    enable_odom_tf: false
+    base_frame_id: base_link
+    odom_frame_id: odom

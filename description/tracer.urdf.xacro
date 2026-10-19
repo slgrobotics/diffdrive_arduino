@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="arduino_bench_test">
+  <xacro:arg name="output_mode" default="verbose"/>
+  <xacro:arg name="hardware_config" default=""/>
+  <xacro:property name="hw" value="${xacro.load_yaml('$(arg hardware_config)')}"/>
+  <link name="base_link"/>
+  <xacro:macro name="wheel" params="side y">
+    <link name="${side}_wheel"/>
+    <joint name="${side}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_wheel"/>
+      <origin xyz="0 ${y} 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+  <!-- Visualization is intentionally omitted; control geometry lives in YAML. -->
+  <xacro:wheel side="left" y="0.15"/>
+  <xacro:wheel side="right" y="-0.15"/>
+  <ros2_control name="ArduinoSystem" type="system">
+    <hardware>
+      <param name="compact_trace">${str('$(arg output_mode)' == 'compact').lower()}</param>
+      <plugin>diffdrive_arduino/DiffDriveArduino</plugin>
+      <param name="left_wheel_name">left_wheel_joint</param>
+      <param name="right_wheel_name">right_wheel_joint</param>
+      <param name="loop_rate">20</param>
+      <param name="device">${hw['device']}</param>
+      <param name="baud_rate">${hw['baud_rate']}</param>
+      <param name="timeout">${hw['timeout']}</param>
+      <param name="enc_counts_per_rev">${hw['enc_counts_per_rev']}</param>
+      <param name="wheels_pwm_factor">${hw['wheels_pwm_factor']}</param>
+      <param name="battery_name">battery</param>
+      <param name="battery_num_cells">${hw['battery_num_cells']}</param>
+      <param name="battery_technology">${hw['battery_technology']}</param>
+      <param name="battery_design_capacity">${hw['battery_design_capacity']}</param>
+    </hardware>
+    <xacro:macro name="wheel_interfaces" params="side">
+      <joint name="${side}_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </xacro:macro>
+    <xacro:wheel_interfaces side="left"/>
+    <xacro:wheel_interfaces side="right"/>
+  </ros2_control>
+</robot>
