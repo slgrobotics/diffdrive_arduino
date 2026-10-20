@@ -93,7 +93,7 @@ For example, the hardware block can use robot-specific Xacro properties for the
 calibration and battery values (define these properties elsewhere in your Xacro):
 
 ```xml
-<ros2_control name="ArduinoSystem" type="system">
+<ros2_control name="MyRobotsArduinoSystem" type="system">
   <hardware>
     <plugin>diffdrive_arduino/DiffDriveArduino</plugin>
     <param name="left_wheel_name">${left_wheel_joint_name}</param>
@@ -113,15 +113,10 @@ calibration and battery values (define these properties elsewhere in your Xacro)
 </ros2_control>
 ```
 
-See actual configuration file example [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/description/ros2_control.xacro)
-and [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/config/controllers.yaml).
-
-The initializers in `include/diffdrive_arduino/config.h` are **not fallbacks**:
-`on_init()` overwrites every `cfg_` field unconditionally. A missing map entry
-produces an empty string; string fields become empty and numeric conversions
-throw. Supply all parameters explicitly. Values are read once during
-initialization; changing a ROS node parameter later does not update `cfg_` or
-reconfigure the serial port.
+> **Note:**
+> - hardware-related parameters are now located in robot's *config*, here is an [example](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/config/hardware.yaml).
+> - see actual configuration file example [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/description/ros2_control.xacro)
+> and [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/config/controllers.yaml). We use *Xacro* (XML Macros) to render all elements.
 
 ### Linux serial transport
 
