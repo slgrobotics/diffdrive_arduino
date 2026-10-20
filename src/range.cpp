@@ -3,12 +3,6 @@
 #include <cmath>
 
 
-Range::Range(const std::string &range_name)
-{
-  setup(range_name);
-}
-
-
 void Range::setup(const std::string &range_name, double no_return_range)
 {
   name = range_name;

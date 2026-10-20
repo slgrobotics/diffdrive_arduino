@@ -13,11 +13,7 @@ Matching Arduino code can be found in the following sketches:
 
 public:
 
-  ArduinoComms()
-  {  }
-
-  ArduinoComms(const std::string &serial_device, int32_t baud_rate, int32_t timeout_ms)
-  { setup(serial_device, baud_rate, timeout_ms); }
+  ArduinoComms() = default;
 
   void setup(const std::string &serial_device, int32_t baud_rate, int32_t timeout_ms);
 

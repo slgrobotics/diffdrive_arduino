@@ -33,7 +33,9 @@ int main()
     require(left == 0 && right == 0, "Zero reply parsed incorrectly");
     require(parseEncoderValues(" -12345\t67890\r\n", left, right), "Signed reply rejected");
 
-    Wheel l("left", 60), r("right", 60);
+    Wheel l, r;
+    l.setup("left", 60, 1.0);
+    r.setup("right", 60, 1.0);
     l.setEncoderBaseline(-12345);
     r.setEncoderBaseline(67890);
     diff_drive_controller::Odometry odometry;

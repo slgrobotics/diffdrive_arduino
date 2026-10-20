@@ -12,8 +12,6 @@ class Range
 
     Range() = default;
 
-    Range(const std::string &range_name);
-    
     void setup(
       const std::string &range_name,
       double no_return_range = std::numeric_limits<double>::infinity());

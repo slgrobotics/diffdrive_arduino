@@ -39,8 +39,8 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   cfg_.wheels_pwm_factor = std::stof(info_.hardware_parameters["wheels_pwm_factor"]);
 
   // Set up the wheels:
-  l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev);
-  r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev);
+  l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev, cfg_.wheels_pwm_factor);
+  r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev, cfg_.wheels_pwm_factor);
 
   // Optional finite representation of a sonar no-return reading, in meters.
   double sonar_no_return_range = std::numeric_limits<double>::infinity();
@@ -294,15 +294,6 @@ hardware_interface::return_type DiffDriveArduino::read(
   return return_type::OK;
 }
 
-int roundAndLimit(double val)
-{
-  int ival = (int)round(val);
-
-  ival = std::min(std::max(ival, -100), 100);
-
-  return ival;
-}
-
 hardware_interface::return_type DiffDriveArduino::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
@@ -314,14 +305,11 @@ hardware_interface::return_type DiffDriveArduino::write(
   // Arduino expects wheel speed setpoints in the range -100..100 (percent of max speed)
   // Use wheels_pwm_factor parameter to bring interface speed input into this range
 
-  int l_cmd = roundAndLimit(l_wheel_.cmd * cfg_.wheels_pwm_factor);
-  int r_cmd = roundAndLimit(r_wheel_.cmd * cfg_.wheels_pwm_factor);
-
-  //RCLCPP_INFO(logger_, "cmds: %f %f  sending: %d %d", l_wheel_.cmd, r_wheel_.cmd, l_cmd, r_cmd);
-
   try
   {
-    arduino_.setMotorValues(l_cmd, r_cmd);
+    //RCLCPP_INFO(logger_, "cmds: %f %f  sending: %d %d", l_wheel_.cmd, r_wheel_.cmd, l_wheel_.getRawCmd(), r_wheel_.getRawCmd());
+
+    arduino_.setMotorValues(l_wheel_.getRawCmd(), r_wheel_.getRawCmd());
   }
   catch (const std::exception &error)
   {

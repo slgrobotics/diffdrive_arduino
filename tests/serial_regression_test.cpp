@@ -149,7 +149,8 @@ int main()
     emulator.get();
 
     serial.open(terminal.device, 115200, 80); // Reconfiguration closes the old descriptor.
-    ArduinoComms arduino(terminal.device, 115200, 80);
+    ArduinoComms arduino;
+    arduino.setup(terminal.device, 115200, 80);
     emulator = std::async(std::launch::async, [&] {
       require(terminal.command() == "e\r", "Arduino encoder command changed");
       terminal.send("e -123 456\r");

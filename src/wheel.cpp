@@ -5,13 +5,7 @@
 #include <stdexcept>
 
 
-Wheel::Wheel(const std::string &wheel_name, int counts_per_rev)
-{
-  setup(wheel_name, counts_per_rev);
-}
-
-
-void Wheel::setup(const std::string &wheel_name, int counts_per_rev)
+void Wheel::setup(const std::string &wheel_name, int counts_per_rev, double wheel_pwm_factor)
 {
   name = wheel_name;
   if (counts_per_rev <= 0)
@@ -19,11 +13,23 @@ void Wheel::setup(const std::string &wheel_name, int counts_per_rev)
     throw std::invalid_argument("Encoder counts per revolution must be positive");
   }
   rads_per_count = (2 * M_PI) / counts_per_rev;
+
+  if (wheel_pwm_factor <= 0.001)
+  {
+    throw std::invalid_argument("Wheel PWM factor must be positive");
+  }
+  this->wheel_pwm_factor = wheel_pwm_factor;
 }
 
-double Wheel::calcEncAngle()
+double Wheel::calcEncAngle() const
 {
   return enc * rads_per_count;
+}
+
+int Wheel::roundAndLimit(double val) const
+{
+  int ival = static_cast<int>(std::round(val));
+  return std::max(-100, std::min(100, ival));
 }
 
 void Wheel::setEncoderBaseline(int count)
