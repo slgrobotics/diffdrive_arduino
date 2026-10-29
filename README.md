@@ -70,9 +70,10 @@ cfg_.timeout = std::stoi(info_.hardware_parameters["timeout"]);
 arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);
 ```
 
-All **12 hardware parameters below are required by the current initialization
-code**, including `loop_rate`, which is parsed but currently unused. Battery
-parameters configure `battery_` directly rather than becoming members of `cfg_`.
+All hardware parameters below are required by the current initialization code
+except the optional `reconnect_interval`, which defaults to 2 seconds.
+`loop_rate` is parsed but currently unused. Battery parameters configure
+`battery_` directly rather than becoming members of `cfg_`.
 
 | Parameter | Type | Meaning |
 | --- | --- | --- |
@@ -82,6 +83,7 @@ parameters configure `battery_` directly rather than becoming members of `cfg_`.
 | `device` | String | Linux serial device path, such as `/dev/ttyACM0` or a stable `/dev/serial/by-id/...` path. |
 | `baud_rate` | Integer | Serial baud rate; `115200` for the Seggy and Dragger firmware described here. |
 | `timeout` | Integer | Positive serial response timeout in milliseconds. |
+| `reconnect_interval` | Integer | Optional positive interval in seconds between serial reconnection attempts during normal operation; defaults to `2`. |
 | `enc_counts_per_rev` | Integer | Encoder counts per complete wheel revolution, accounting for gearing and the firmware's counting mode; must be positive. |
 | `wheels_pwm_factor` | Float | Converts wheel velocity commands in rad/s to firmware motor setpoints in percent: `round(velocity * factor)`, clamped to `-100..100`. Calibrate for each robot. |
 | `battery_name` | String | Name used for the exported battery sensor interfaces. |
@@ -102,6 +104,7 @@ calibration and battery values (define these properties elsewhere in your Xacro)
     <param name="device">/dev/ttyACM0</param>
     <param name="baud_rate">115200</param>
     <param name="timeout">1000</param>
+    <param name="reconnect_interval">2</param>
     <param name="enc_counts_per_rev">${encoder_counts_per_wheel_rev}</param>
     <param name="wheels_pwm_factor">${wheel_velocity_to_percent}</param>
     <param name="battery_name">battery</param>
@@ -145,6 +148,15 @@ For the matching firmware with `DO_RESPOND_OK` enabled, set the hardware
 `baud_rate` parameter to **115200**. The empty startup command must return
 `* OK\r`; motor and PID commands must return `m OK\r` and `u OK\r`.
 Missing or invalid acknowledgments fail activation, deactivation, or motor writes.
+Serial errors during initial activation are reported with the underlying reason
+and fail activation, preventing the hardware from becoming active. During normal
+operation, a serial failure stops further motor writes, zeros the driver's wheel
+commands and velocities, and keeps the hardware interface alive while it retries
+the connection indefinitely at `reconnect_interval` seconds. A successful
+reconnection repeats the handshake, configures the PID values, sends a zero
+motor command, and establishes a fresh encoder baseline before normal operation
+resumes. If the device is unavailable on a retry, another attempt follows after
+the configured interval.
 Health replies contain voltage in millivolts, current in milliamperes, and free
 memory in bytes; sonar replies contain front-right, front-left, back-right, and
 back-left distances in centimeters. Invalid telemetry preserves the last valid

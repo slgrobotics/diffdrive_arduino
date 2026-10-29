@@ -11,6 +11,7 @@ struct Config
   std::string device = "/dev/ttyACM0";  // Arduino Mega 2560
   int baud_rate = 115200;
   int timeout = 1000;
+  int reconnect_interval = 2;
   int enc_counts_per_rev = 1920;
   float wheels_pwm_factor = 1.0;
 };

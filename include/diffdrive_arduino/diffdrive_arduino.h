@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <exception>
 #include "rclcpp/rclcpp.hpp"
 
 #include "hardware_interface/system_interface.hpp"
@@ -43,6 +44,10 @@ public:
 
 private:
 
+  void initializeArduino();
+  bool ensureArduinoConnected();
+  void handleRuntimeSerialError(const std::exception &error);
+
   Config cfg_;
   ArduinoComms arduino_;
 
@@ -61,6 +66,8 @@ private:
 
   std::chrono::time_point<std::chrono::steady_clock> time_;
   bool encoders_initialized_ = false;
+  bool runtime_reconnect_enabled_ = false;
+  std::chrono::steady_clock::time_point next_reconnect_attempt_{};
 
   int voltage_mv = 0, current_ma = 0, free_mem_bytes = 0;
   int front_right = 0, front_left = 0, back_right = 0, back_left = 0; // centimeters
@@ -72,4 +79,3 @@ private:
   std::chrono::steady_clock::time_point health_time_{};
   std::chrono::steady_clock::time_point sonar_time_{};
 };
-

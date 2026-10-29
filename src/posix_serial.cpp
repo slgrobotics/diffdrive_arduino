@@ -51,6 +51,12 @@ void PosixSerial::closeUnlocked()
   fd_ = -1;
 }
 
+void PosixSerial::close()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  closeUnlocked();
+}
+
 void PosixSerial::ioError(const char *operation, int error)
 {
   closeUnlocked();

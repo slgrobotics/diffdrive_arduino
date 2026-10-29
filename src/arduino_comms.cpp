@@ -26,7 +26,16 @@ bool parseIntegers(const std::string &payload, std::array<int, N> &values)
 void requireAcknowledgment(const std::string &payload, const char *command)
 {
     if (payload != "OK\r")
-        throw std::runtime_error(std::string("Arduino did not acknowledge ") + command);
+    {
+        std::string response = payload;
+        if (!response.empty() && response.back() == '\r')
+        {
+          response.pop_back();
+        }
+        throw std::runtime_error(
+            std::string("Arduino did not acknowledge ") + command +
+            "; response: '" + response + "'");
+    }
 }
 }
 
@@ -120,49 +129,60 @@ Matching Arduino code can be found in the following sketches:
 
 std::string ArduinoComms::sendMsg(const std::string &msg_to_send, bool print_output)
 {
+    std::string response;
     try
     {
         // Every command expects a CR-terminated reply prefixed with its command letter.
-        const std::string response = serial_conn_.exchange(msg_to_send);
-        // Debug tracing includes every reply, even replies rejected below.
-        // Escape CR/LF so each transaction remains a readable log line.
-        auto escaped = [](const std::string & value) {
-            std::string result;
-            for (char c : value) {
-                if (c == '\r') result += "\\r";
-                else if (c == '\n') result += "\\n";
-                else result += c;
-            }
-            return result;
-        };
-        RCLCPP_DEBUG(rclcpp::get_logger("DiffDriveArduino"), "TX '%s' RX '%s'",
-                     escaped(msg_to_send).c_str(), escaped(response).c_str());
-        if (response.size() < 3 || response[1] != ' ' || response.back() != '\r')
-        {
-            RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Incomplete or malformed Arduino response");
-            return {};
-        }
-        if (response.front() == '?')
-        {
-            RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Firmware rejected command: %s", response.c_str());
-            return {};
-        }
-        // An empty command is acknowledged with '*', rather than an echoed CR.
-        const char expected_command = msg_to_send == "\r" ? '*' : msg_to_send.front();
-        if (response.front() != expected_command)
-        {
-            RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Arduino reply does not match command '%c'", msg_to_send.front());
-            return {};
-        }
-        if (print_output)
-        {
-            RCLCPP_DEBUG_STREAM(rclcpp::get_logger("DiffDriveArduino"), "Sent: '" << msg_to_send << "' received: '" << response << "'");
-        }
-        return response.substr(2);
+        response = serial_conn_.exchange(msg_to_send);
     }
-    catch (const std::exception &error)
+    catch (...)
     {
-        RCLCPP_ERROR(rclcpp::get_logger("DiffDriveArduino"), "Arduino serial transaction: %s", error.what());
-        return {};
+        serial_conn_.close();
+        throw;
     }
+
+    if (response.empty())
+    {
+        serial_conn_.close();
+        throw std::runtime_error(
+            std::string("Timed out waiting for Arduino response to command '") +
+            msg_to_send.front() + "'");
+    }
+
+    // Escape CR/LF so each transaction remains a readable log line.
+    auto escaped = [](const std::string & value) {
+        std::string result;
+        for (char c : value) {
+            if (c == '\r') result += "\\r";
+            else if (c == '\n') result += "\\n";
+            else result += c;
+        }
+        return result;
+    };
+    RCLCPP_DEBUG(rclcpp::get_logger("DiffDriveArduino"), "TX '%s' RX '%s'",
+                 escaped(msg_to_send).c_str(), escaped(response).c_str());
+    if (response.size() < 3 || response[1] != ' ' || response.back() != '\r')
+    {
+        serial_conn_.close();
+        throw std::runtime_error("Incomplete or malformed Arduino response");
+    }
+    if (response.front() == '?')
+    {
+        serial_conn_.close();
+        throw std::runtime_error(std::string("Firmware rejected command: ") + response);
+    }
+    // An empty command is acknowledged with '*', rather than an echoed CR.
+    const char expected_command = msg_to_send == "\r" ? '*' : msg_to_send.front();
+    if (response.front() != expected_command)
+    {
+        serial_conn_.close();
+        throw std::runtime_error(
+            std::string("Arduino response does not match command '") +
+            msg_to_send.front() + "'");
+    }
+    if (print_output)
+    {
+        RCLCPP_DEBUG_STREAM(rclcpp::get_logger("DiffDriveArduino"), "Sent: '" << msg_to_send << "' received: '" << response << "'");
+    }
+    return response.substr(2);
 }

@@ -28,6 +28,17 @@ void expectThrow(Function action)
   throw std::runtime_error("Expected exception was not thrown");
 }
 
+template<class Exception, class Function>
+void expectThrowContaining(Function action, const std::string &text)
+{
+  try { action(); }
+  catch (const Exception &error) {
+    require(std::string(error.what()).find(text) != std::string::npos, "Exception did not include expected detail");
+    return;
+  }
+  throw std::runtime_error("Expected exception was not thrown");
+}
+
 struct Terminal
 {
   int master = -1;
@@ -164,14 +175,16 @@ int main()
     int left = 0, right = 0;
     require(arduino.readEncoderValues(left, right) && left == -123 && right == 456, "Encoder reply parse failed");
     arduino.setMotorValues(10, -20);
-    for (int i = 0; i < 3; ++i) {
-      require(!arduino.readEncoderValues(left, right), "Invalid encoder reply accepted");
-      require(left == -123 && right == 456, "Invalid reply changed encoder state");
-    }
+    expectThrow<std::runtime_error>([&] { arduino.readEncoderValues(left, right); });
+    arduino.setup(terminal.device, 115200, 80);
+    require(!arduino.readEncoderValues(left, right), "Invalid encoder payload accepted");
+    require(left == -123 && right == 456, "Invalid reply changed encoder state");
+    expectThrow<std::runtime_error>([&] { arduino.readEncoderValues(left, right); });
     emulator.get();
 
 
     // Firmware-specific handshake and acknowledgment rules.
+    arduino.setup(terminal.device, 115200, 80);
     emulator = std::async(std::launch::async, [&] {
       require(terminal.command() == "\r", "Startup command changed");
       terminal.send("* OK\r");
@@ -183,14 +196,18 @@ int main()
     });
     arduino.sendEmptyMsg();
     arduino.setPidValues(30, 20, 0, 100);
-    for (int i = 0; i < 3; ++i)
-      expectThrow<std::runtime_error>([&] { arduino.setMotorValues(0, 0); });
+    expectThrow<std::runtime_error>([&] { arduino.setMotorValues(0, 0); });
+    expectThrow<std::runtime_error>([&] { arduino.setMotorValues(0, 0); });
+    arduino.setup(terminal.device, 115200, 80);
+    expectThrow<std::runtime_error>([&] { arduino.setMotorValues(0, 0); });
     emulator.get();
+    arduino.setup(terminal.device, 115200, 80);
     emulator = std::async(std::launch::async, [&] {
       terminal.command(); terminal.send("u ERROR\r");
       terminal.command(); terminal.send("* ERROR\r");
     });
-    expectThrow<std::runtime_error>([&] { arduino.setPidValues(30, 20, 0, 100); });
+    expectThrowContaining<std::runtime_error>(
+      [&] { arduino.setPidValues(30, 20, 0, 100); }, "response: 'ERROR'");
     expectThrow<std::runtime_error>([&] { arduino.sendEmptyMsg(); });
     emulator.get();
 
@@ -237,7 +254,7 @@ int main()
     terminal.master = -1;
     expectThrow<std::system_error>([&] { serial.exchange("e\r"); });
     require(!serial.isOpen(), "Disconnected descriptor retained");
-    require(arduino.sendMsg("e\r").empty(), "Disconnect not reported as failed transaction");
+    expectThrow<std::system_error>([&] { arduino.sendMsg("e\r"); });
     require(!arduino.connected(), "Arduino remains connected after I/O failure");
 
     Terminal blocked;

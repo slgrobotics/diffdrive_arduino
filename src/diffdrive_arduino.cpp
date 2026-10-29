@@ -1,6 +1,7 @@
 #include "diffdrive_arduino/diffdrive_arduino.h"
 
 #include <cmath>
+#include <chrono>
 #include <limits>
 #include <stdexcept>
 
@@ -40,6 +41,24 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   cfg_.device = info_.hardware_parameters["device"];
   cfg_.baud_rate = std::stoi(info_.hardware_parameters["baud_rate"]);
   cfg_.timeout = std::stoi(info_.hardware_parameters["timeout"]);
+  const auto reconnect_interval = info_.hardware_parameters.find("reconnect_interval");
+  if (reconnect_interval != info_.hardware_parameters.end())
+  {
+    try
+    {
+      size_t parsed = 0;
+      cfg_.reconnect_interval = std::stoi(reconnect_interval->second, &parsed);
+      if (parsed != reconnect_interval->second.size() || cfg_.reconnect_interval <= 0)
+      {
+        throw std::invalid_argument("expected a positive whole number of seconds");
+      }
+    }
+    catch (const std::exception &error)
+    {
+      RCLCPP_ERROR(logger_, "Invalid reconnect_interval: %s", error.what());
+      return CallbackReturn::ERROR;
+    }
+  }
   cfg_.enc_counts_per_rev = std::stoi(info_.hardware_parameters["enc_counts_per_rev"]);
   cfg_.wheels_pwm_factor = std::stof(info_.hardware_parameters["wheels_pwm_factor"]);
 
@@ -78,7 +97,17 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   battery_.setDesignCapacity(std::stof(info_.hardware_parameters["battery_design_capacity"]));
 
   // Set up the Arduino
-  arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);  
+  try
+  {
+    arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);
+  }
+  catch (const std::exception &error)
+  {
+    RCLCPP_ERROR(
+      logger_, "Failed to open Arduino serial device '%s': %s",
+      cfg_.device.c_str(), error.what());
+    return CallbackReturn::ERROR;
+  }
 
   RCLCPP_INFO(logger_, "Finished Configuration - Arduino on %s at %d baud", const_cast<char*>(cfg_.device.c_str()), cfg_.baud_rate);
 
@@ -123,34 +152,19 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_li
   RCLCPP_INFO(logger_, "Starting Arduino Controller...");
 
   encoders_initialized_ = false;
+  runtime_reconnect_enabled_ = false;
   l_wheel_.cmd = r_wheel_.cmd = 0.0;
   if (!arduino_.connected())
   {
+    RCLCPP_ERROR(
+      logger_, "Cannot activate: Arduino serial device '%s' is not connected",
+      cfg_.device.c_str());
     return CallbackReturn::ERROR;
   }
 
   try
   {
-    arduino_.sendEmptyMsg();
-    //arduino_.sendEmptyMsg();
-    //arduino_.sendEmptyMsg();
-    // arduino.setPidValues(9,7,0,100);
-    // arduino.setPidValues(14,7,0,100);
-    sleep(1);
-    arduino_.setPidValues(30, 20, 0, 100);
-    arduino_.setMotorValues(0, 0);
-
-    int left, right;
-    if (!arduino_.readEncoderValues(left, right))
-    {
-      RCLCPP_ERROR(logger_, "Cannot activate: invalid encoder baseline response");
-      return CallbackReturn::ERROR;
-    }
-    l_wheel_.setEncoderBaseline(left);
-    r_wheel_.setEncoderBaseline(right);
-    time_ = std::chrono::steady_clock::now();
-    encoders_initialized_ = true;
-    RCLCPP_INFO(logger_, "Encoder baseline: left=%d right=%d", left, right);
+    initializeArduino();
   }
   catch (const std::exception &error)
   {
@@ -158,13 +172,88 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_activate(const rclcpp_li
     return CallbackReturn::ERROR;
   }
 
+  runtime_reconnect_enabled_ = true;
   return CallbackReturn::SUCCESS;
+}
+
+void DiffDriveArduino::initializeArduino()
+{
+  arduino_.sendEmptyMsg();
+  sleep(1);
+  arduino_.setPidValues(30, 20, 0, 100);
+  arduino_.setMotorValues(0, 0);
+
+  int left, right;
+  if (!arduino_.readEncoderValues(left, right))
+  {
+    throw std::runtime_error("Invalid encoder baseline response");
+  }
+  l_wheel_.setEncoderBaseline(left);
+  r_wheel_.setEncoderBaseline(right);
+  l_wheel_.cmd = r_wheel_.cmd = 0.0;
+  l_wheel_.vel = r_wheel_.vel = 0.0;
+  time_ = std::chrono::steady_clock::now();
+  encoders_initialized_ = true;
+  RCLCPP_INFO(logger_, "Encoder baseline: left=%d right=%d", left, right);
+}
+
+bool DiffDriveArduino::ensureArduinoConnected()
+{
+  if (arduino_.connected() && encoders_initialized_)
+  {
+    return true;
+  }
+  if (!runtime_reconnect_enabled_)
+  {
+    return false;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+  if (now < next_reconnect_attempt_)
+  {
+    return false;
+  }
+  next_reconnect_attempt_ = now + std::chrono::seconds(cfg_.reconnect_interval);
+  RCLCPP_WARN(logger_, "Attempting to reconnect to Arduino at '%s'", cfg_.device.c_str());
+
+  try
+  {
+    arduino_.setup(cfg_.device, cfg_.baud_rate, cfg_.timeout);
+    initializeArduino();
+    RCLCPP_INFO(logger_, "Arduino serial link reconnected");
+    return true;
+  }
+  catch (const std::exception &error)
+  {
+    arduino_.close();
+    encoders_initialized_ = false;
+    next_reconnect_attempt_ =
+      std::chrono::steady_clock::now() + std::chrono::seconds(cfg_.reconnect_interval);
+    RCLCPP_ERROR(
+      logger_, "Arduino reconnect failed: %s; retrying in %d seconds",
+      error.what(), cfg_.reconnect_interval);
+    return false;
+  }
+}
+
+void DiffDriveArduino::handleRuntimeSerialError(const std::exception &error)
+{
+  arduino_.close();
+  encoders_initialized_ = false;
+  l_wheel_.cmd = r_wheel_.cmd = 0.0;
+  l_wheel_.vel = r_wheel_.vel = 0.0;
+  next_reconnect_attempt_ =
+    std::chrono::steady_clock::now() + std::chrono::seconds(cfg_.reconnect_interval);
+  RCLCPP_ERROR(
+    logger_, "Arduino serial link error: %s; retrying in %d seconds",
+    error.what(), cfg_.reconnect_interval);
 }
 
 hardware_interface::CallbackReturn DiffDriveArduino::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(logger_, "Stopping Arduino Controller...");
 
+  runtime_reconnect_enabled_ = false;
   encoders_initialized_ = false;
   l_wheel_.cmd = r_wheel_.cmd = 0.0;
   l_wheel_.vel = r_wheel_.vel = 0.0;
@@ -198,9 +287,9 @@ hardware_interface::return_type DiffDriveArduino::read(
    * return return_type::OK if the read was successful, return_type::ERROR otherwise.
    */
 
-  if (!arduino_.connected())
+  if (!ensureArduinoConnected())
   {
-    return return_type::ERROR;
+    return return_type::OK;
   }
 
   if (!encoders_initialized_)
@@ -208,92 +297,104 @@ hardware_interface::return_type DiffDriveArduino::read(
     // No usable wheel state until activation has established a valid baseline.
     return return_type::OK;
   }
-  int left, right;
+
   try
   {
+    int left, right;
     if (!arduino_.readEncoderValues(left, right))
     {
-      RCLCPP_ERROR(logger_, "Invalid encoder response; wheel state unchanged");
+      throw std::runtime_error("Invalid encoder response");
+    }
+    // Measure between successful encoder samples using a clock immune to wall-time jumps.
+    const auto new_time = std::chrono::steady_clock::now();
+    const double deltaSeconds = std::chrono::duration<double>(new_time - time_).count();
+    if (!std::isfinite(deltaSeconds) || deltaSeconds <= 0.0)
+    {
+      RCLCPP_ERROR(logger_, "Invalid encoder sample interval");
       return return_type::ERROR;
+    }
+    l_wheel_.updateEncoder(left, deltaSeconds);
+    r_wheel_.updateEncoder(right, deltaSeconds);
+    time_ = new_time;
+
+    if ((++bat_cnt_) > 10)
+    {
+      bat_cnt_ = 0;
+
+      if (arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes))
+      {
+        health_time_ = std::chrono::steady_clock::now();
+        battery_.setVoltage(static_cast<double>(voltage_mv) / 1000.0);   // Volts
+        battery_.setTemperature(21.0f);                                  // Celsius
+        battery_.setCurrent(-static_cast<double>(current_ma) / 1000.0);  // Amperes
+        battery_.setPercentage();
+        battery_.setCapacity(battery_.design_capacity * 0.9);
+        battery_.setCharge(battery_.capacity * battery_.percentage);
+        battery_.setPresent(battery_.voltage > 1.0);
+        battery_.setPowerSupplyStatus(
+          battery_.voltage > 14.0 ?
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING :
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
+        battery_.setPowerSupplyHealth(
+          battery_.voltage > 11.0 ?
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD :
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN);
+        battery_interfaces_.update(battery_);
+      }
+      else
+      {
+        throw std::runtime_error("Invalid health response");
+      }
+    }
+
+    if (arduino_.readPingValues(front_right, front_left, back_right, back_left))
+    {
+      sonar_time_ = std::chrono::steady_clock::now();
+      range_f_l_.setRange(front_left); // meters
+      range_f_r_.setRange(front_right);
+      range_b_l_.setRange(back_left);
+      range_b_r_.setRange(back_right);
+    }
+    else
+    {
+      throw std::runtime_error("Invalid sonar response");
+    }
+
+    const auto trace_now = std::chrono::steady_clock::now();
+    if (compact_trace_ && trace_now - trace_time_ >= std::chrono::seconds(1))
+    {
+      trace_time_ = trace_now;
+      auto age = [&](const std::chrono::steady_clock::time_point & sample) {
+        return sample == std::chrono::steady_clock::time_point{} ? -1.0 :
+          std::chrono::duration<double>(trace_now - sample).count();
+      };
+      RCLCPP_INFO(logger_,
+        "encoders L=%d R=%d counts | health=%d mV %d mA free=%d bytes age=%.1fs\n"
+        "sonar FR=%d FL=%d BR=%d BL=%d cm age=%.1fs (-1 age=waiting)",
+        left, right, voltage_mv, current_ma, free_mem_bytes, age(health_time_),
+        front_right, front_left, back_right, back_left, age(sonar_time_));
+    }
+    if (!compact_trace_ && (++print_cnt_) > 100)
+    {
+      print_cnt_ = 0;
+
+      RCLCPP_INFO(
+        logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free",
+        battery_.voltage, battery_.current, free_mem_bytes);
+
+      RCLCPP_INFO(
+        logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters",
+        range_f_l_.getRange(), range_f_r_.getRange(),
+        range_b_l_.getRange(), range_b_r_.getRange());
+
+      RCLCPP_INFO(
+        logger_, "Encoders: L=%d R=%d counts   Vel: %.2f %.2f m/s   Cmd: %.2f %.2f",
+        left, right, l_wheel_.vel, r_wheel_.vel, l_wheel_.cmd, r_wheel_.cmd);
     }
   }
   catch (const std::exception &error)
   {
-    RCLCPP_ERROR(logger_, "Encoder read failed: %s", error.what());
-    return return_type::ERROR;
-  }
-  // Measure between successful encoder samples using a clock immune to wall-time jumps.
-  const auto new_time = std::chrono::steady_clock::now();
-  const double deltaSeconds = std::chrono::duration<double>(new_time - time_).count();
-  if (!std::isfinite(deltaSeconds) || deltaSeconds <= 0.0)
-  {
-    RCLCPP_ERROR(logger_, "Invalid encoder sample interval");
-    return return_type::ERROR;
-  }
-  l_wheel_.updateEncoder(left, deltaSeconds);
-  r_wheel_.updateEncoder(right, deltaSeconds);
-  time_ = new_time;
-
-  if((++bat_cnt_) > 10)
-  {
-    bat_cnt_ = 0;
-
-    if (arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes))
-    {
-      health_time_ = std::chrono::steady_clock::now();
-      battery_.setVoltage(((double)voltage_mv) / 1000.0);   // Volts
-      battery_.setTemperature(21.0f);                       // Celcius
-      battery_.setCurrent(-((double)current_ma) / 1000.0);  // Amperes
-      battery_.setPercentage();                             // in 0...1.0 range. Calculate it first from Voltage
-      battery_.setCapacity(battery_.design_capacity * 0.9); // can't directly inquire it. Can be lower than design_capacity
-      battery_.setCharge(battery_.capacity * battery_.percentage);
-      battery_.setPresent(battery_.voltage > 1.0);
-      battery_.setPowerSupplyStatus(battery_.voltage > 14.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
-      battery_.setPowerSupplyHealth(battery_.voltage > 11.0 ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD : sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN);
-      battery_interfaces_.update(battery_);
-    }
-    else
-    {
-      RCLCPP_WARN(logger_, "Invalid health response; battery state unchanged");
-    }
-  }
-
-  if (arduino_.readPingValues(front_right, front_left, back_right, back_left))
-  {
-    sonar_time_ = std::chrono::steady_clock::now();
-    range_f_l_.setRange(front_left); // meters
-    range_f_r_.setRange(front_right);
-    range_b_l_.setRange(back_left);
-    range_b_r_.setRange(back_right);
-  }
-  else
-  {
-    RCLCPP_WARN(logger_, "Invalid sonar response; range state unchanged");
-  }
-
-  const auto trace_now = std::chrono::steady_clock::now();
-  if (compact_trace_ && trace_now - trace_time_ >= std::chrono::seconds(1))
-  {
-    trace_time_ = trace_now;
-    auto age = [&](const std::chrono::steady_clock::time_point & sample) {
-      return sample == std::chrono::steady_clock::time_point{} ? -1.0 :
-        std::chrono::duration<double>(trace_now - sample).count();
-    };
-    RCLCPP_INFO(logger_,
-      "encoders L=%d R=%d counts | health=%d mV %d mA free=%d bytes age=%.1fs\n"
-      "sonar FR=%d FL=%d BR=%d BL=%d cm age=%.1fs (-1 age=waiting)",
-      left, right, voltage_mv, current_ma, free_mem_bytes, age(health_time_),
-      front_right, front_left, back_right, back_left, age(sonar_time_));
-  }
-  if(!compact_trace_ && (++print_cnt_) > 100)
-  {
-    print_cnt_ = 0;
-
-    RCLCPP_INFO(logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free", battery_.voltage, battery_.current, free_mem_bytes);
-
-    RCLCPP_INFO(logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters", range_f_l_.getRange(), range_f_r_.getRange(), range_b_l_.getRange(), range_b_r_.getRange());
-
-    RCLCPP_INFO(logger_, "Encoders: L=%d R=%d counts   Vel: %.2f %.2f m/s   Cmd: %.2f %.2f", left, right, l_wheel_.vel, r_wheel_.vel, l_wheel_.cmd, r_wheel_.cmd);
+    handleRuntimeSerialError(error);
   }
 
   return return_type::OK;
@@ -302,9 +403,9 @@ hardware_interface::return_type DiffDriveArduino::read(
 hardware_interface::return_type DiffDriveArduino::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  if (!arduino_.connected())
+  if (!ensureArduinoConnected())
   {
-    return return_type::ERROR;
+    return return_type::OK;
   }
 
   // Arduino expects wheel speed setpoints in the range -100..100 (percent of max speed)
@@ -318,8 +419,8 @@ hardware_interface::return_type DiffDriveArduino::write(
   }
   catch (const std::exception &error)
   {
-    RCLCPP_ERROR(logger_, "Motor write failed: %s", error.what());
-    return return_type::ERROR;
+    handleRuntimeSerialError(error);
+    return return_type::OK;
   }
 
   return return_type::OK;

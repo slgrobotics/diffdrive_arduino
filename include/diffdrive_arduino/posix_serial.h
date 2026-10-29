@@ -16,6 +16,7 @@ public:
   PosixSerial &operator=(const PosixSerial &) = delete;
 
   void open(const std::string &device, int32_t baud_rate, int32_t timeout_ms);
+  void close();
   bool isOpen() const;
   // Returns an empty string on timeout; throws on I/O errors or oversized replies.
   std::string exchange(const std::string &command, size_t max_response = 1024);
