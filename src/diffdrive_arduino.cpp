@@ -24,6 +24,11 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
 
   RCLCPP_INFO(logger_, "Configuring...");
 
+  for (const auto & [name, value] : info_.hardware_parameters)
+  {
+    RCLCPP_INFO(logger_, "        %s = %s", name.c_str(), value.c_str());
+  }
+
   compact_trace_ = info_.hardware_parameters.count("compact_trace") &&
     info_.hardware_parameters.at("compact_trace") == "true";
   trace_time_ = std::chrono::steady_clock::now();
