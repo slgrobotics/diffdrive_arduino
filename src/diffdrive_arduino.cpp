@@ -98,6 +98,25 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   const auto charging_field = info_.hardware_parameters.find("has_battery_charging_field");
   cfg_.has_battery_charging_field = charging_field != info_.hardware_parameters.end() &&
     charging_field->second == "true";
+  const auto full_voltage = info_.hardware_parameters.find("battery_full_voltage");
+  if (full_voltage != info_.hardware_parameters.end())
+  {
+    try
+    {
+      size_t parsed = 0;
+      const double voltage = std::stod(full_voltage->second, &parsed);
+      if (parsed != full_voltage->second.size() || !std::isfinite(voltage) || voltage <= 0.0)
+      {
+        throw std::invalid_argument("expected a finite positive voltage");
+      }
+      cfg_.battery_full_voltage = voltage;
+    }
+    catch (const std::exception &error)
+    {
+      RCLCPP_ERROR(logger_, "Invalid battery_full_voltage: %s", error.what());
+      return CallbackReturn::ERROR;
+    }
+  }
 
   // Set up the Arduino
   try
@@ -337,11 +356,21 @@ hardware_interface::return_type DiffDriveArduino::read(
         battery_.setCapacity(battery_.design_capacity * 0.9);
         battery_.setCharge(battery_.capacity * battery_.percentage);
         battery_.setPresent(battery_.voltage > 1.0);
-        battery_.setPowerSupplyStatus(
-          charging.value_or(battery_.voltage > 14.0) ?
-          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING :
-          (charging.has_value() ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_NOT_CHARGING :
-          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING));
+        using BatteryState = sensor_msgs::msg::BatteryState;
+        auto status = BatteryState::POWER_SUPPLY_STATUS_DISCHARGING;
+        if (battery_.voltage >= cfg_.battery_full_voltage)
+        {
+          status = BatteryState::POWER_SUPPLY_STATUS_FULL;
+        }
+        else if (charging.value_or(battery_.voltage > 14.0))
+        {
+          status = BatteryState::POWER_SUPPLY_STATUS_CHARGING;
+        }
+        else if (charging.has_value())
+        {
+          status = BatteryState::POWER_SUPPLY_STATUS_NOT_CHARGING;
+        }
+        battery_.setPowerSupplyStatus(status);
         battery_.setPowerSupplyHealth(
           battery_.voltage > 11.0 ?
           sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD :
@@ -385,9 +414,19 @@ hardware_interface::return_type DiffDriveArduino::read(
     {
       print_cnt_ = 0;
 
+      using BatteryState = sensor_msgs::msg::BatteryState;
+      const char *status = "Unknown";
+      switch (static_cast<int>(battery_.power_supply_status))
+      {
+        case BatteryState::POWER_SUPPLY_STATUS_CHARGING: status = "Charging"; break;
+        case BatteryState::POWER_SUPPLY_STATUS_DISCHARGING: status = "Discharging"; break;
+        case BatteryState::POWER_SUPPLY_STATUS_NOT_CHARGING: status = "Not charging"; break;
+        case BatteryState::POWER_SUPPLY_STATUS_FULL: status = "Full"; break;
+      }
+
       RCLCPP_INFO(
-        logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free",
-        battery_.voltage, battery_.current, free_mem_bytes);
+        logger_, "Battery Health: %.2f V     %.3f A    %d mem bytes free    %s",
+        battery_.voltage, battery_.current, free_mem_bytes, status);
 
       RCLCPP_INFO(
         logger_, "Ping: %.2f   %.2f   %.2f   %.2f meters",

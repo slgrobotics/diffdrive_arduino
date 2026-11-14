@@ -14,5 +14,6 @@ struct Config
   int reconnect_interval = 2;
   int enc_counts_per_rev = 1920;
   float wheels_pwm_factor = 1.0;
+  double battery_full_voltage = 14.5;  // Volts
   bool has_battery_charging_field = false;
 };
