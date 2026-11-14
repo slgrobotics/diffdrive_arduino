@@ -98,6 +98,9 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   const auto charging_field = info_.hardware_parameters.find("has_battery_charging_field");
   cfg_.has_battery_charging_field = charging_field != info_.hardware_parameters.end() &&
     charging_field->second == "true";
+  const auto measured_current = info_.hardware_parameters.find("battery_current_measured");
+  battery_current_measured_ = measured_current != info_.hardware_parameters.end() &&
+    measured_current->second == "true";
   const auto full_voltage = info_.hardware_parameters.find("battery_full_voltage");
   if (full_voltage != info_.hardware_parameters.end())
   {
@@ -350,7 +353,7 @@ hardware_interface::return_type DiffDriveArduino::read(
         health_time_ = std::chrono::steady_clock::now();
         battery_.setVoltage(static_cast<double>(voltage_mv) / 1000.0);   // Volts
         battery_.setTemperature(21.0f);                                  // Celsius
-        battery_.setCurrent(charging.has_value() ? std::numeric_limits<double>::quiet_NaN() :
+        battery_.setCurrent(charging.has_value() && !battery_current_measured_ ? std::numeric_limits<double>::quiet_NaN() :
           -static_cast<double>(current_ma) / 1000.0);  // Amperes
         battery_.setPercentage();
         battery_.setCapacity(battery_.design_capacity * 0.9);

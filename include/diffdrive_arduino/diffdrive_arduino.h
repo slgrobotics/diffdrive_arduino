@@ -48,6 +48,7 @@ private:
   bool ensureArduinoConnected();
   void handleRuntimeSerialError(const std::exception &error);
 
+  bool battery_current_measured_ = false;
   Config cfg_;
   ArduinoComms arduino_;
 
