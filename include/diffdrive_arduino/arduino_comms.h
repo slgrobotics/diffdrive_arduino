@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "diffdrive_arduino/posix_serial.h"
 
 class ArduinoComms
@@ -21,7 +23,8 @@ public:
   void sendEmptyMsg();
   
   bool readEncoderValues(int &val_1, int &val_2);
-  bool readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes);
+  bool readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes,
+                        std::optional<bool> *charging = nullptr);
   bool readPingValues(int &front_right, int &front_left, int &back_right, int &back_left);
 
   void setMotorValues(int val_1, int val_2);

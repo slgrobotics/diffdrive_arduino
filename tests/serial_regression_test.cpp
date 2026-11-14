@@ -214,14 +214,16 @@ int main()
     // Firmware numeric telemetry must parse atomically, including signed current.
     const std::string invalid_health[] = {
       "h bogus -1 0\r", "h 12000x -1 0\r", "h 2147483648 -1 0\r",
-      "h 12000 -1\r", "h 12000 -1 0 extra\r", "h 12000-1 0\r"};
+      "h 12000 -1\r", "h 12000 -1 0 extra\r", "h 12000-1 0\r", "h 12000 0 0 2\r", "h 12000 0 0 1 extra\r"};
     const std::string invalid_sonar[] = {
       "p 0 0 bad 0\r", "p 0 0 0\r", "p 0 0 0 2147483648\r", "p 0 0 0 0 extra\r"};
     emulator = std::async(std::launch::async, [&] {
       require(terminal.command() == "h\r", "Health command changed");
       terminal.send("h 12600 -1 0\r");
-      require(terminal.command() == "h\r", "Dragger health command changed");
-      terminal.send("h 13713 4530 2048\r");
+      require(terminal.command() == "h\r", "Seggy health command changed");
+      terminal.send("h 13000 0 0 1\r");
+      terminal.command(); terminal.send("h 13000 0 0 0\r");
+      terminal.command(); terminal.send("h 13713 4530 2048\r");
       for (const auto &response : invalid_health) { terminal.command(); terminal.send(response); }
       require(terminal.command() == "p\r", "Sonar command changed");
       terminal.send("p 0 0 0 0\r");
@@ -231,7 +233,13 @@ int main()
     int voltage = 0, current = 0, memory = 7;
     require(arduino.readHealthValues(voltage, current, memory), "Valid health reply rejected");
     require(voltage == 12600 && current == -1 && memory == 0, "Health units/values changed");
-    require(arduino.readHealthValues(voltage, current, memory), "Dragger health reply rejected");
+    std::optional<bool> charging;
+    require(arduino.readHealthValues(voltage, current, memory, &charging) && charging == true,
+      "Charging Seggy reply rejected");
+    require(arduino.readHealthValues(voltage, current, memory, &charging) && charging == false,
+      "Inactive Seggy reply rejected");
+    require(arduino.readHealthValues(voltage, current, memory, &charging) && !charging.has_value(),
+      "Dragger reply must clear the optional charging state");
     require(voltage == 13713 && current == 4530 && memory == 2048, "Dragger health values changed");
     for (const auto &response : invalid_health) {
       (void)response;

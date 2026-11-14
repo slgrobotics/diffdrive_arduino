@@ -64,13 +64,27 @@ bool ArduinoComms::readEncoderValues(int &val_1, int &val_2)
     return parseEncoderValues(response, val_1, val_2);
 }
 
-bool ArduinoComms::readHealthValues(int &voltage_mv, int &current_ma, int &free_mem_bytes)
+bool ArduinoComms::readHealthValues(
+    int &voltage_mv, int &current_ma, int &free_mem_bytes, std::optional<bool> *charging)
 {
-    std::array<int, 3> values;
-    if (!parseIntegers(sendMsg("h\r"), values)) return false;
-    voltage_mv = values[0];
-    current_ma = values[1];
-    free_mem_bytes = values[2];
+    const std::string payload = sendMsg("h\r");
+    std::array<int, 4> extended;
+    std::array<int, 3> legacy;
+    std::optional<bool> chargeState;
+    if (parseIntegers(payload, extended))
+    {
+        if (extended[3] != 0 && extended[3] != 1) return false;
+        chargeState = extended[3] == 1;
+        legacy = {extended[0], extended[1], extended[2]};
+    }
+    else if (!parseIntegers(payload, legacy))
+    {
+        return false;
+    }
+    voltage_mv = legacy[0];
+    current_ma = legacy[1];
+    free_mem_bytes = legacy[2];
+    if (charging) *charging = chargeState;
     return true;
 }
 

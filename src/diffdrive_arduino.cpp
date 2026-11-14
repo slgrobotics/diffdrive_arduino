@@ -95,6 +95,9 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   battery_.setPowerSupplyTechnology(std::stoi(info_.hardware_parameters["battery_technology"]));
 
   battery_.setDesignCapacity(std::stof(info_.hardware_parameters["battery_design_capacity"]));
+  const auto charging_field = info_.hardware_parameters.find("has_battery_charging_field");
+  cfg_.has_battery_charging_field = charging_field != info_.hardware_parameters.end() &&
+    charging_field->second == "true";
 
   // Set up the Arduino
   try
@@ -321,20 +324,24 @@ hardware_interface::return_type DiffDriveArduino::read(
     {
       bat_cnt_ = 0;
 
-      if (arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes))
+      std::optional<bool> charging;
+      if (arduino_.readHealthValues(voltage_mv, current_ma, free_mem_bytes,
+          cfg_.has_battery_charging_field ? &charging : nullptr))
       {
         health_time_ = std::chrono::steady_clock::now();
         battery_.setVoltage(static_cast<double>(voltage_mv) / 1000.0);   // Volts
         battery_.setTemperature(21.0f);                                  // Celsius
-        battery_.setCurrent(-static_cast<double>(current_ma) / 1000.0);  // Amperes
+        battery_.setCurrent(charging.has_value() ? std::numeric_limits<double>::quiet_NaN() :
+          -static_cast<double>(current_ma) / 1000.0);  // Amperes
         battery_.setPercentage();
         battery_.setCapacity(battery_.design_capacity * 0.9);
         battery_.setCharge(battery_.capacity * battery_.percentage);
         battery_.setPresent(battery_.voltage > 1.0);
         battery_.setPowerSupplyStatus(
-          battery_.voltage > 14.0 ?
+          charging.value_or(battery_.voltage > 14.0) ?
           sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING :
-          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING);
+          (charging.has_value() ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_NOT_CHARGING :
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING));
         battery_.setPowerSupplyHealth(
           battery_.voltage > 11.0 ?
           sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD :
