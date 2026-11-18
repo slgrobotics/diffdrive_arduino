@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cmath>
 
 class Wheel
 {
@@ -14,11 +15,12 @@ class Wheel
     double eff = 0;
     double velSetPt = 0;
     double rads_per_count = 0;
+    int min_command_percent = 0; // Rounded firmware commands below this magnitude become zero
     double wheel_pwm_factor = 1.0;  // scaling factor to convert velocity command to Arduino's -100..100 range
 
     Wheel() = default;
     
-    void setup(const std::string &wheel_name, int counts_per_rev, double wheel_pwm_factor = 1.0);
+    void setup(const std::string &wheel_name, int counts_per_rev, double wheel_pwm_factor = 1.0, int min_command_percent = 0);
 
     double calcEncAngle() const;
 
@@ -28,7 +30,10 @@ class Wheel
     {
       // Arduino expects wheel speed setpoints in the range -100..100 (percent of max speed)
       // Use wheels_pwm_factor parameter to bring interface speed input into this range
-      return roundAndLimit(cmd * wheel_pwm_factor);
+      const double percent = cmd * wheel_pwm_factor;
+      if (!std::isfinite(percent)) return 0;
+      const int command = roundAndLimit(percent);
+      return std::abs(command) < min_command_percent ? 0 : command;
     }
 
     // Rebase raw counters without changing the exposed joint position.

@@ -75,6 +75,9 @@ ament_export_dependencies(
 
 if(BUILD_TESTING)
   enable_testing()
+  add_executable(wheel_command_test tests/wheel_command_test.cpp src/wheel.cpp)
+  target_include_directories(wheel_command_test PRIVATE include)
+  add_test(NAME wheel_command_test COMMAND wheel_command_test)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_test(NAME tracer_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/tracer_test.py)
   set_tests_properties(tracer_test PROPERTIES ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")

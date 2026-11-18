@@ -10,6 +10,7 @@ See my [Main Project Wiki](https://github.com/slgrobotics/articubot_one/wiki)
 
 - [Overview](#diffdrive_arduino---a-unified-ros2-base-driver)
 - [Hardware parameters and `cfg_`](#hardware-parameters-and-cfg_)
+- [Per-wheel low-speed enforcement](#per-wheel-low-speed-enforcement)
 - [Linux serial transport](#linux-serial-transport)
 - [Data flow](#data-flow)
 - [Encoder initialization](#encoder-initialization-code-fixes-by-chatgpt-codex)
@@ -85,6 +86,7 @@ except the optional `reconnect_interval`, which defaults to 2 seconds.
 | `timeout` | Integer | Positive serial response timeout in milliseconds. |
 | `reconnect_interval` | Integer | Optional positive interval in seconds between serial reconnection attempts during normal operation; defaults to `2`. |
 | `enc_counts_per_rev` | Integer | Encoder counts per complete wheel revolution, accounting for gearing and the firmware's counting mode; must be positive. |
+| `wheel_min_command_percent` | Integer, optional, default `0` (disabled), range `0..100`. After scaling, rounding and saturation, each wheel command below this absolute percentage becomes zero. |
 | `wheels_pwm_factor` | Float | Converts wheel velocity commands in rad/s to firmware motor setpoints in percent: `round(velocity * factor)`, clamped to `-100..100`. Calibrate for each robot. |
 | `battery_name` | String | Name used for the exported battery sensor interfaces. |
 | `battery_num_cells` | Integer | Number of cells in series; used by the battery voltage/charge estimate. |
@@ -121,7 +123,36 @@ calibration and battery values (define these properties elsewhere in your Xacro)
 > - see actual configuration file example [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/description/ros2_control.xacro)
 > and [here](https://github.com/slgrobotics/articubot_one/blob/lyrical/robots/seggy/config/controllers.yaml). We use *Xacro* (XML Macros) to render all elements.
 
-### Linux serial transport
+### Per-wheel low-speed enforcement
+
+Set the hardware parameter `wheel_min_command_percent` to suppress wheel speeds
+that do not run smoothly. The default `0` preserves existing behavior. Seggy uses
+`9`, based on direct firmware tests with 9–10% wheel commands.
+
+```xml
+<param name="wheel_min_command_percent">9</param>
+```
+
+This is an initialization-time hardware setting, not a dynamically settable ROS
+node parameter. Rebuild the driver and restart the hardware stack after changing
+it. Each wheel is handled independently after `wheels_pwm_factor` conversion,
+rounding to integer percent, and saturation to ±100. With threshold 9, ±1 through
+±8 become zero, while ±9 and larger pass unchanged. Zero stays zero. The filter
+never boosts a tiny correction into a larger movement. Nonfinite inputs stop
+the affected wheel. Encoder feedback and odometry calculations are unchanged.
+
+A zero is transmitted every normal write cycle; stopping does not wait for the
+firmware watchdog. Actual braking remains the responsibility of motor control.
+Curves can become pivots when only the slower wheel falls below the threshold.
+There is no hysteresis, so commands crossing the threshold can switch on/off.
+
+For Seggy's `wheels_pwm_factor=28.5714`, the rounded 9% command is approximately
+0.315 rad/s at each wheel (0.038 m/s straight, 0.163 rad/s in-place rotation).
+Slow docking commands can now become zero. Tune approach, alignment, and insertion
+speeds before testing docking with this filter enabled; for example a pure
+0.015 m/s insertion produces only about 4% and will be suppressed.
+
+## Linux serial transport
 
 > **Do not** clone `https://github.com/joshnewans/serial.git` package anymore on the robots.
 

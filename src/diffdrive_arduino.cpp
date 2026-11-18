@@ -62,9 +62,31 @@ hardware_interface::CallbackReturn DiffDriveArduino::on_init(const hardware_inte
   cfg_.enc_counts_per_rev = std::stoi(info_.hardware_parameters["enc_counts_per_rev"]);
   cfg_.wheels_pwm_factor = std::stof(info_.hardware_parameters["wheels_pwm_factor"]);
 
+  // Optional per-wheel deadband in the integer percent commands sent to firmware.
+  cfg_.wheel_min_command_percent = 0;
+  const auto minimum_command = info_.hardware_parameters.find("wheel_min_command_percent");
+  if (minimum_command != info_.hardware_parameters.end())
+  {
+    try
+    {
+      size_t parsed = 0;
+      cfg_.wheel_min_command_percent = std::stoi(minimum_command->second, &parsed);
+      if (parsed != minimum_command->second.size() ||
+          cfg_.wheel_min_command_percent < 0 || cfg_.wheel_min_command_percent > 100)
+      {
+        throw std::invalid_argument("expected a whole percentage in 0..100");
+      }
+    }
+    catch (const std::exception &error)
+    {
+      RCLCPP_ERROR(logger_, "Invalid wheel_min_command_percent: %s", error.what());
+      return CallbackReturn::ERROR;
+    }
+  }
+
   // Set up the wheels:
-  l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev, cfg_.wheels_pwm_factor);
-  r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev, cfg_.wheels_pwm_factor);
+  l_wheel_.setup(cfg_.left_wheel_name, cfg_.enc_counts_per_rev, cfg_.wheels_pwm_factor, cfg_.wheel_min_command_percent);
+  r_wheel_.setup(cfg_.right_wheel_name, cfg_.enc_counts_per_rev, cfg_.wheels_pwm_factor, cfg_.wheel_min_command_percent);
 
   // Optional finite representation of a sonar no-return reading, in meters.
   double sonar_no_return_range = std::numeric_limits<double>::infinity();

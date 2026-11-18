@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 
-void Wheel::setup(const std::string &wheel_name, int counts_per_rev, double wheel_pwm_factor)
+void Wheel::setup(const std::string &wheel_name, int counts_per_rev, double wheel_pwm_factor, int min_command_percent)
 {
   name = wheel_name;
   if (counts_per_rev <= 0)
@@ -14,10 +14,15 @@ void Wheel::setup(const std::string &wheel_name, int counts_per_rev, double whee
   }
   rads_per_count = (2 * M_PI) / counts_per_rev;
 
-  if (wheel_pwm_factor <= 0.001)
+  if (!std::isfinite(wheel_pwm_factor) || wheel_pwm_factor <= 0.001)
   {
     throw std::invalid_argument("Wheel PWM factor must be positive");
   }
+  if (min_command_percent < 0 || min_command_percent > 100)
+  {
+    throw std::invalid_argument("Minimum wheel command percent must be in 0..100");
+  }
+  this->min_command_percent = min_command_percent;
   this->wheel_pwm_factor = wheel_pwm_factor;
 }
 
@@ -28,7 +33,7 @@ double Wheel::calcEncAngle() const
 
 int Wheel::roundAndLimit(double val) const
 {
-  int ival = static_cast<int>(std::round(val));
+  int ival = static_cast<int>(std::round(std::max(-100.0, std::min(100.0, val))));
   return std::max(-100, std::min(100, ival));
 }
 
